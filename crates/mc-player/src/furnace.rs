@@ -134,7 +134,7 @@ impl FurnaceManager {
 
     /// 每 20 tick 推进 (在主 tick 循环中调用)
     pub fn tick(&mut self) {
-        for (_pos, f) in self.furnaces.iter_mut() {
+        for f in self.furnaces.values_mut() {
             // 消耗燃料
             if f.fuel_ticks > 0 {
                 f.fuel_ticks -= 1;

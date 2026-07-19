@@ -163,7 +163,7 @@ impl BrewingStandManager {
     }
 
     pub fn tick(&mut self, registry: &BrewingRegistry, _container_manager: &crate::container::ContainerManager) {
-        for (_pos, stand) in self.stands.iter_mut() {
+        for stand in self.stands.values_mut() {
             if stand.fuel > 0 && stand.can_brew(registry) {
                 stand.brew_ticks = stand.brew_ticks.saturating_add(1);
                 if stand.brew_ticks >= 400 {
