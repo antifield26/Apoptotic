@@ -5,6 +5,7 @@
 *.db-wal
 .env
 docker-compose.override.yml
+CLAUDE.md
 .claude/
 logs/
 *.tmp
