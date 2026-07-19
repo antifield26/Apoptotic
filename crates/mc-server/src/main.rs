@@ -889,7 +889,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut drops = dropped_for_tick.write();
                     for player in player_manager.all_players() {
                         let px = player.position.x; let py = player.position.y; let pz = player.position.z;
-                        for (_eid, (item_id, ix, iy, iz)) in drops.iter_mut() {
+                        for (item_id, ix, iy, iz) in drops.values_mut() {
                             let dx = px - *ix; let dy = (py + 1.0) - *iy; let dz = pz - *iz;
                             let dist_sq = dx*dx + dy*dy + dz*dz;
                             if dist_sq < 64.0 && dist_sq > 0.0 { // within 8 blocks

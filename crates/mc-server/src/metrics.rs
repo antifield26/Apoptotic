@@ -203,10 +203,9 @@ fn estimate_memory_mb() -> u64 {
     {
         if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
             let parts: Vec<&str> = statm.split_whitespace().collect();
-            if let Some(res) = parts.get(1) {
-                if let Ok(pages) = res.parse::<u64>() {
+            if let Some(res) = parts.get(1)
+                && let Ok(pages) = res.parse::<u64>() {
                     return pages * 4 / 1024; // 4KB pages → MB
-                }
             }
         }
     }
