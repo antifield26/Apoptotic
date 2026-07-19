@@ -141,6 +141,14 @@ pub struct Player {
     pub mining_multiplier: f32,
     /// 跳跃倍率 (JumpBoost 效果, 默认 1.0)
     pub jump_multiplier: f32,
+    /// 待确认的传送 ID (用于 TeleportConfirm 0x00 校验)
+    pub pending_teleport_id: Option<i32>,
+    /// 客户端视距设置 (ClientInformation 0x0C)
+    pub client_view_distance: u8,
+    /// 客户端语言设置
+    pub client_locale: String,
+    /// 上一次消息确认计数 (MessageAcknowledgment 0x01)
+    pub last_acknowledged_count: i32,
     /// 经验条进度 (0.0-1.0)
     pub xp_bar: f32,
     /// 经验等级
@@ -238,6 +246,10 @@ impl PlayerManager {
             speed_multiplier: 1.0,
             mining_multiplier: 1.0,
             jump_multiplier: 1.0,
+            pending_teleport_id: None,
+            client_view_distance: 8,
+            client_locale: String::new(),
+            last_acknowledged_count: 0,
             xp_bar: 0.0,
             xp_level: 0,
             xp_total: 0,
@@ -763,7 +775,7 @@ impl PlayerManager {
         // Fire Resistance cancels fire damage
         if dmg_type == "fire" && self.get_effect_level(uuid, 12) > 0 { return; } // fire_resistance=12
         // Water Breathing prevents drowning
-        if dmg_type == "drowning" && self.get_effect_level(uuid, 13) > 0 { return; } // water_breathing=13
+        if dmg_type == "drowning" && (self.get_effect_level(uuid, 13) > 0 || self.get_effect_level(uuid, 29) > 0) { return; } // water_breathing=13, conduit_power=29
         let damage = match dmg_type {
             "void" => 4.0,
             "fire" => 1.0,
@@ -1361,6 +1373,35 @@ impl PlayerManager {
             if !flying {
                 p.fall_distance = 0.0; // reset fall distance on landing/stop
             }
+        }
+    }
+
+    /// Set pending teleport ID for TeleportConfirm validation
+    pub fn set_pending_teleport(&self, uuid: &Uuid, teleport_id: i32) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.pending_teleport_id = Some(teleport_id);
+        }
+    }
+
+    /// Clear pending teleport after client confirmation
+    pub fn clear_pending_teleport(&self, uuid: &Uuid) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.pending_teleport_id = None;
+        }
+    }
+
+    /// Store client view distance from ClientInformation packet
+    pub fn set_client_view_distance(&self, uuid: &Uuid, view_distance: u8, locale: &str) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.client_view_distance = view_distance;
+            p.client_locale = locale.to_string();
+        }
+    }
+
+    /// Store last acknowledged message count for chat signing
+    pub fn set_acknowledged_count(&self, uuid: &Uuid, count: i32) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.last_acknowledged_count = count;
         }
     }
 

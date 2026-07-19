@@ -1838,15 +1838,26 @@ async fn play_loop(
             }
 
         match packet_id {
-            // Confirm Teleportation (0x00) — client acknowledges teleport
+            // Confirm Teleportation (0x00) — client acknowledges teleport with ID
             0x00 => {
-                debug!("Teleport confirm from {}", username);
+                if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
+                    && payload.len() >= 4 {
+                        let teleport_id = i32::from_be_bytes(payload[..4].try_into().unwrap_or([0;4]));
+                        let pending = server.player_manager.get(&_uuid)
+                            .and_then(|p| p.pending_teleport_id);
+                        if pending == Some(teleport_id) {
+                            server.player_manager.clear_pending_teleport(&_uuid);
+                            debug!("Teleport {} confirmed by {}", teleport_id, username);
+                        } else {
+                            debug!("Teleport ID mismatch: got {}, expected {:?} from {}", teleport_id, pending, username);
+                        }
+                    }
             }
             // Message Acknowledgment (0x01) — client confirms chat message receipt (1.21+ requirement)
             0x01 => {
-                // Parse MessageAcknowledgment to maintain protocol state
-                // The client sends this to acknowledge received chat messages; we just consume it
-                let _ = io.codec().decode::<mc_protocol::packets::play::MessageAcknowledgment>(&frame);
+                if let Ok(msg) = io.codec().decode::<mc_protocol::packets::play::MessageAcknowledgment>(&frame) {
+                    server.player_manager.set_acknowledged_count(&_uuid, msg.message_count);
+                }
             }
             // Chat Command (0x08) — slash command via alternate channel
             0x05 => {
@@ -1938,6 +1949,7 @@ async fn play_loop(
             0x0C => {
                 match io.codec().decode::<ClientInformation>(&frame) {
                     Ok(info) => {
+                        server.player_manager.set_client_view_distance(&_uuid, info.view_distance, &info.locale);
                         debug!("Client info: locale={}, view_distance={}", info.locale, info.view_distance);
                     }
                     Err(e) => {
@@ -2018,10 +2030,19 @@ async fn play_loop(
                         let x = f64::from_be_bytes(payload[0..8].try_into().unwrap_or([0;8]));
                         let y = f64::from_be_bytes(payload[8..16].try_into().unwrap_or([0;8]));
                         let z = f64::from_be_bytes(payload[16..24].try_into().unwrap_or([0;8]));
-                        let (old_y, old_yaw, old_pitch) = server.player_manager.get(&_uuid)
-                            .map(|p| (p.position.y, p.position.yaw, p.position.pitch))
-                            .unwrap_or((y, 0.0, 0.0));
-                        let _ = server.player_manager.update_position_full(&_uuid, x, y, z, old_yaw, old_pitch);
+                        let (old_x, old_y, old_z, old_yaw, old_pitch) = server.player_manager.get(&_uuid)
+                            .map(|p| (p.position.x, p.position.y, p.position.z, p.position.yaw, p.position.pitch))
+                            .unwrap_or((x, y, z, 0.0, 0.0));
+                        // Apply speed_multiplier from effects (Speed/Slowness) for anti-cheat bounds
+                        let speed_mul = server.player_manager.get(&_uuid)
+                            .map(|p| p.speed_multiplier).unwrap_or(1.0);
+                        let max_delta = 10.0 * speed_mul as f64;
+                        let dx = (x - old_x).abs();
+                        let dz = (z - old_z).abs();
+                        if dx <= max_delta && dz <= max_delta {
+                            let _ = server.player_manager.update_position_full(&_uuid, x, y, z, old_yaw, old_pitch);
+                        }
+                        // Fallback for first join (no old position) or within bounds
                         if let Some(eid) = server.player_manager.get_entity_id(&_uuid) {
                             server.player_manager.broadcast_entity_move(eid, _uuid, x, y, z, old_yaw, old_pitch);
                         }
@@ -2280,11 +2301,12 @@ async fn play_loop(
                                     let unbreaking_level = held_enchants.get("unbreaking").copied().unwrap_or(0);
                                     let skip_durability = unbreaking_level > 0
                                         && fastrand::u32(1..=100) <= 100 / (unbreaking_level as u32 + 1);
-                                    // AquaAffinity: bypass underwater mining speed penalty
+                                    // AquaAffinity + MiningFatigue/Haste: mining speed modifiers
                                     let aqua_affinity = server.player_manager.get_armor_enchant_level(&_uuid, 39, "aqua_affinity");
-                                    if aqua_affinity > 0 {
-                                        // Client-side mining speed is 5x faster — server accepts normal break timing
-                                        debug!("AquaAffinity: underwater mining speed bypass for {}", username);
+                                    let mining_mul = server.player_manager.get(&_uuid)
+                                        .map(|p| p.mining_multiplier).unwrap_or(1.0);
+                                    if aqua_affinity > 0 || mining_mul > 1.0 {
+                                        debug!("Mining speed modifier: {}x for {} (AquaAffinity={})", mining_mul, username, aqua_affinity);
                                     }
                                     if !skip_durability {
                                         let _ = server.player_manager.damage_held_item(&_uuid, 1);
@@ -2615,7 +2637,11 @@ async fn play_loop(
                             .map(|nbt| mc_player::enchant::parse_item_enchants(&Some(nbt.clone())))
                             .unwrap_or_default();
                         let lure_level = held_fishing_enchants.get("lure").copied().unwrap_or(0);
-                        let luck_level = held_fishing_enchants.get("luck_of_the_sea").copied().unwrap_or(0);
+                        let enchant_luck = held_fishing_enchants.get("luck_of_the_sea").copied().unwrap_or(0);
+                        // Luck/Unluck effects modify fishing treasure probability
+                        let effect_luck = server.player_manager.get_effect_level(&_uuid, 26); // Luck=26
+                        let effect_unluck = server.player_manager.get_effect_level(&_uuid, 27); // Unluck=27
+                        let luck_level = enchant_luck.saturating_add(effect_luck).saturating_sub(effect_unluck);
 
                         let existing_fishing = player.as_ref().and_then(|p| p.fishing.as_ref()).cloned();
                         if let Some(fish_state) = existing_fishing {
@@ -4148,11 +4174,20 @@ async fn play_loop(
                     if (0..=8).contains(&slot) { debug!("{} picked item from slot {}", username, slot); }
                 }
             }
-            // CommandSuggestions (0x08) — tab completion: parse and return empty list
+            // CommandSuggestions (0x08) — tab completion: parse and echo
             0x08 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) {
-                    let (tx_id, _) = mc_protocol::codec::read_varint_enum(&payload).unwrap_or((0, 0));
-                    debug!("Tab complete request id={} from {}", tx_id, username);
+                    let (tx_id, off) = mc_protocol::codec::read_varint_enum(&payload).unwrap_or((0, 0));
+                    let _text = String::from_utf8_lossy(&payload[off..]).to_string();
+                    // Send empty suggestions response to acknowledge the request
+                    let empty_resp = mc_protocol::packets::play::CommandSuggestionsResponse {
+                        transaction_id: tx_id,
+                        start: 0,
+                        length: _text.len() as i32,
+                        matches: Vec::new(),
+                    };
+                    let _ = send_packet(io, &empty_resp).await;
+                    debug!("Tab complete id={} from {}", tx_id, username);
                 }
             }
             // ClientTickEnd (0x21) — client tick complete; validate and track tick timing
@@ -4183,6 +4218,7 @@ async fn play_loop(
                 }
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && !payload.is_empty() {
                     let locked = payload[0] != 0;
+                    server.world_state.write().difficulty_locked = locked;
                     info!("Difficulty lock: {} (by {})", locked, username);
                 }
             }

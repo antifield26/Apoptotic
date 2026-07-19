@@ -1583,6 +1583,50 @@ impl PacketDecoder for UpdateRecipes {
 }
 
 // ═══════════════════════════════════════════════════════
+// S→C: Command Suggestions Response (0x0F)
+// ═══════════════════════════════════════════════════════
+
+pub struct SuggestionMatch {
+    pub text: String,
+    pub tooltip: Option<String>,
+}
+
+pub struct CommandSuggestionsResponse {
+    pub transaction_id: i32,
+    pub start: i32,
+    pub length: i32,
+    pub matches: Vec<SuggestionMatch>,
+}
+
+impl PacketEncoder for CommandSuggestionsResponse {
+    fn packet_id(&self) -> i32 { 0x0F }
+    fn encode_payload(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&write_varint_bytes(self.transaction_id));
+        buf.extend_from_slice(&write_varint_bytes(self.start));
+        buf.extend_from_slice(&write_varint_bytes(self.length));
+        buf.extend_from_slice(&write_varint_bytes(self.matches.len() as i32));
+        for m in &self.matches {
+            buf.extend_from_slice(&write_string(&m.text));
+            if let Some(ref tip) = m.tooltip {
+                buf.push(1);
+                buf.extend_from_slice(&write_string(tip));
+            } else {
+                buf.push(0);
+            }
+        }
+        buf
+    }
+}
+
+impl PacketDecoder for CommandSuggestionsResponse {
+    fn packet_id() -> i32 { 0x0F }
+    fn decode_payload(_data: &[u8]) -> Result<Self, CodecError> {
+        Err(CodecError::Malformed("CommandSuggestionsResponse decode not implemented".into()))
+    }
+}
+
+// ═══════════════════════════════════════════════════════
 // C→S: Place Recipe (0x1B) — player clicked crafting result
 // ═══════════════════════════════════════════════════════
 

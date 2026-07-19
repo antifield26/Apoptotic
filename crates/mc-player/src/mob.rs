@@ -1047,6 +1047,128 @@ impl MobManager {
                     mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*0.5).clamp(50.0, 63.0);
                     mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*3.0, target_z: mob.position.z + (fastrand::f64()-0.5)*3.0 };
                 }
+                // ── Hostile mob unique AI (Phase 3 additions) ──
+                // Zombie (36): wander + close-range melee attack stance
+                if mob.mob_type == 36 {
+                    if mob.age_ticks % 60 == 0 {
+                        mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*6.0, target_z: mob.position.z + (fastrand::f64()-0.5)*6.0 };
+                    }
+                    // Melee attack when near player: set chasing state for damage in main loop
+                    if let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 16.0 && mob.attack_cooldown == 0 {
+                                mob.attack_cooldown = 20;
+                                mob.ai_state = MobAiState::Chasing { target_uuid: player.uuid };
+                                // 3 HP melee damage — applied via set_health reduction
+                                let new_hp = player.health - 3.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                break;
+                            }
+                        }
+                    }
+                }
+                // BOGGED (130): ranged poison arrow every 2s at 4-15 block range
+                if mob.mob_type == 130 && mob.attack_cooldown == 0 && mob.age_ticks % 40 == 0
+                    && let Some(_pm) = player_manager {
+                        for player in _pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            let dist_sq = dx*dx + dz*dz;
+                            if dist_sq > 16.0 && dist_sq < 225.0 {
+                                mob.attack_cooldown = 40;
+                                let eid = self.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                self.spawn_projectile(player.uuid, mob.entity_id,
+                                    ProjectileType::Arrow, mob.position.x, mob.position.y + 1.0, mob.position.z,
+                                    dx * 0.1, 0.3, dz * 0.1, 2.0);
+                                let _ = self.position_tx.send(MobPositionEvent { entity_id: eid, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                                break;
+                            }
+                        }
+                    }
+                // Stray (112): ranged slowness arrow every 1.5s at 4-15 block range
+                if mob.mob_type == 112 && mob.attack_cooldown == 0 && mob.age_ticks % 30 == 0
+                    && let Some(_pm) = player_manager {
+                        for player in _pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            let dist_sq = dx*dx + dz*dz;
+                            if dist_sq > 16.0 && dist_sq < 225.0 {
+                                mob.attack_cooldown = 30;
+                                let eid = self.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                self.spawn_projectile(player.uuid, mob.entity_id,
+                                    ProjectileType::Arrow, mob.position.x, mob.position.y + 1.0, mob.position.z,
+                                    dx * 0.1, 0.3, dz * 0.1, 4.0);
+                                let _ = self.position_tx.send(MobPositionEvent { entity_id: eid, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                                break;
+                            }
+                        }
+                    }
+                // Husk (111): melee + hunger effect at 2.5 block range
+                if mob.mob_type == 111 && mob.attack_cooldown == 0 && mob.age_ticks % 40 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 6.25 {
+                                mob.attack_cooldown = 20;
+                                let new_hp = player.health - 3.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                let _ = pm.add_effect(&player.uuid, mc_core::effect::ActiveEffect {
+                                    effect: mc_core::effect::EffectType::Hunger,
+                                    amplifier: 1, duration_ticks: 140,
+                                });
+                                break;
+                            }
+                        }
+                    }
+                // WitherSkeleton (49): melee + wither effect at 3.5 block range
+                if mob.mob_type == 49 && mob.attack_cooldown == 0 && mob.age_ticks % 50 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 12.25 {
+                                mob.attack_cooldown = 25;
+                                let new_hp = player.health - 4.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                let _ = pm.add_effect(&player.uuid, mc_core::effect::ActiveEffect {
+                                    effect: mc_core::effect::EffectType::Wither,
+                                    amplifier: 0, duration_ticks: 100,
+                                });
+                                break;
+                            }
+                        }
+                    }
+                // Vindicator (51): fast melee attack within 3 blocks
+                if mob.mob_type == 51 && mob.attack_cooldown == 0 && mob.age_ticks % 20 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 9.0 {
+                                mob.attack_cooldown = 12;
+                                let new_hp = player.health - 5.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                break;
+                            }
+                        }
+                    }
+                // PiglinBrute (60): high-damage melee within 3 blocks
+                if mob.mob_type == 60 && mob.attack_cooldown == 0 && mob.age_ticks % 25 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 9.0 {
+                                mob.attack_cooldown = 15;
+                                let new_hp = player.health - 7.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                break;
+                            }
+                        }
+                    }
                 // SnowGolem (105): wander + throw snowballs at hostile mobs
                 if mob.mob_type == 105 {
                     if mob.age_ticks % 60 == 0 {
@@ -1088,8 +1210,8 @@ impl MobManager {
                     }
                     let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
                 }
-                // Strider: floats on lava (type 57) — avoid water damage
-                if mob.mob_type == 57 && mob.age_ticks % 100 == 0 {
+                // Strider (125): floats on lava — avoid sinking below surface
+                if mob.mob_type == 125 && mob.age_ticks % 100 == 0 {
                     mob.position.y = mob.position.y.max(32.0); // stay above lava surface
                 }
                 if mob.mob_type == 17 && mob.age_ticks % 40 == 0 {

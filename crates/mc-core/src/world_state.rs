@@ -13,6 +13,7 @@ pub struct WorldState {
     pub weather: Weather,
     pub weather_timer: u64,
     pub difficulty: Difficulty,
+    pub difficulty_locked: bool,
     pub seed: u64,
     /// 新玩家加入时的默认游戏模式
     pub default_gamemode: GameMode,
@@ -92,6 +93,7 @@ impl Default for WorldState {
             weather: Weather::Clear,
             weather_timer: 12000, // start with 10 min clear weather
             difficulty: Difficulty::Normal,
+            difficulty_locked: false,
             seed: 0,
             default_gamemode: GameMode::Survival,
             spawn_x: 0.0,
