@@ -2,10 +2,9 @@
 [target.aarch64-unknown-linux-gnu]
 rustflags = [
     "-C", "target-cpu=cortex-a76",
-    "-C", "target-feature=+neon,+v8.2a,+lse,+rcpc,+fp-armv8",
+    "-C", "target-feature=+neon,+lse,+rcpc",
     "-C", "link-arg=-Wl,-z,now",
     "-C", "llvm-args=-enable-machine-outliner",
-    "-C", "llvm-args=-enable-load-pre",
 ]
 # Cross-compilation linker
 # linker = "aarch64-linux-gnu-gcc"

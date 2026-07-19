@@ -437,9 +437,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let shutdown_tx_term = shutdown_tx.clone();
         tokio::spawn(async move {
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .ok()
-                .and_then(|mut sig| sig.recv().ok());
+            if let Ok(mut sig) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                sig.recv().await;
+            }
             info!("SIGTERM received, shutting down gracefully...");
             let _ = shutdown_tx_term.send(());
         });
@@ -464,7 +464,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             interval.tick().await;
             // Write to NOTIFY_SOCKET for systemd watchdog
             if let Ok(sock_path) = std::env::var("NOTIFY_SOCKET") {
-                use std::io::Write;
                 use std::os::unix::net::UnixDatagram;
                 if let Ok(sock) = UnixDatagram::unbound() {
                     let _ = sock.send_to(b"WATCHDOG=1", &sock_path);
