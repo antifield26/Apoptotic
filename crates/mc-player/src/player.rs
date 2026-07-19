@@ -141,6 +141,10 @@ pub struct Player {
     pub mining_multiplier: f32,
     /// 跳跃倍率 (JumpBoost 效果, 默认 1.0)
     pub jump_multiplier: f32,
+    /// 坠落伤害倍率 (SlowFalling 效果, 默认 1.0, 激活时 0.0)
+    pub fall_damage_multiplier: f32,
+    /// 游泳速度倍率 (DolphinGrace 效果, 默认 1.0)
+    pub swim_speed_multiplier: f32,
     /// 待确认的传送 ID (用于 TeleportConfirm 0x00 校验)
     pub pending_teleport_id: Option<i32>,
     /// 客户端视距设置 (ClientInformation 0x0C)
@@ -149,6 +153,8 @@ pub struct Player {
     pub client_locale: String,
     /// 上一次消息确认计数 (MessageAcknowledgment 0x01)
     pub last_acknowledged_count: i32,
+    /// 已知配方 ID 集合 (RecipeBookData 0x13)
+    pub known_recipes: std::collections::HashSet<u16>,
     /// 经验条进度 (0.0-1.0)
     pub xp_bar: f32,
     /// 经验等级
@@ -246,10 +252,13 @@ impl PlayerManager {
             speed_multiplier: 1.0,
             mining_multiplier: 1.0,
             jump_multiplier: 1.0,
+            fall_damage_multiplier: 1.0,
+            swim_speed_multiplier: 1.0,
             pending_teleport_id: None,
             client_view_distance: 8,
             client_locale: String::new(),
             last_acknowledged_count: 0,
+            known_recipes: std::collections::HashSet::new(),
             xp_bar: 0.0,
             xp_level: 0,
             xp_total: 0,
@@ -759,6 +768,9 @@ impl PlayerManager {
 
     /// Apply fall damage based on fall distance (with Feather Falling enchant)
     pub fn apply_fall_damage(&self, uuid: &Uuid, fall_distance: f32, feather_falling: u8) {
+        // SlowFalling(28): complete fall damage immunity
+        let slow_fall = self.get_effect_level(uuid, 28);
+        if slow_fall > 0 { return; }
         if fall_distance > 3.0 {
             let mut damage = (fall_distance - 3.0) * 1.0;
             // Feather Falling: -12% per level
@@ -1138,8 +1150,25 @@ impl PlayerManager {
                 .map(|e| e.amplifier + 1).unwrap_or(0);
             player.jump_multiplier = 1.0 + 0.5 * jump_lvl as f32;
 
-            // Haste (3): mining speed multiplier — applied in PlayerAction handler
-            // SlowFalling (28): reduces fall damage — checked in add_fall_distance
+            // SlowFalling (28): flag for fall damage immunity (checked in environmental damage tick)
+            let slow_fall_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 28)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            player.fall_damage_multiplier = if slow_fall_lvl > 0 { 0.0 } else { 1.0 };
+
+            // DolphinGrace (30): swim speed boost when in water
+            let dolphin_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 30)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            player.swim_speed_multiplier = 1.0 + 0.5 * dolphin_lvl as f32;
+
+            // Blindness (15): prevent sprinting (same pattern as Invisibility)
+            let blind_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 15)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            if blind_lvl > 0 {
+                player.is_sprinting = false;
+            }
 
             // Invisibility (14): reduce mob detection range — tracked in mob AI
             let invis_lvl = player.active_effects.iter()
@@ -1402,6 +1431,56 @@ impl PlayerManager {
     pub fn set_acknowledged_count(&self, uuid: &Uuid, count: i32) {
         if let Some(mut p) = self.players.get_mut(uuid) {
             p.last_acknowledged_count = count;
+        }
+    }
+
+    /// Store book content in item NBT at specific slot (EditBook 0x0E)
+    pub fn update_item_nbt_at_slot(&self, uuid: &Uuid, slot: i32, text: &str) -> Result<(), String> {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            if slot >= 0 && (slot as usize) < p.inventory.items.len() {
+                let nbt_bytes = format!("pages:{}", text).into_bytes();
+                let idx = slot as usize;
+                if let Some(ref mut stack) = p.inventory.items[idx] {
+                    stack.nbt = Some(nbt_bytes);
+                }
+            }
+            Ok(())
+        } else { Err("Player not found".into()) }
+    }
+
+    /// Store custom display name on held item (RenameItem 0x12)
+    pub fn set_held_item_name(&self, uuid: &Uuid, name: &str) -> Result<(), String> {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            let idx = p.inventory.selected_slot as usize;
+            let nbt_bytes = format!("display:{{\"Name\":\"{}\"}}", name).into_bytes();
+            if let Some(ref mut stack) = p.inventory.items[idx] {
+                stack.nbt = Some(nbt_bytes);
+            }
+            Ok(())
+        } else { Err("Player not found".into()) }
+    }
+
+    /// Track player's unlocked recipe IDs (RecipeBookData 0x13)
+    pub fn add_known_recipe(&self, uuid: &Uuid, recipe_id: u16) {
+        if let Some(mut p) = self.players.get_mut(uuid)
+            && p.known_recipes.len() < 500 {
+                p.known_recipes.insert(recipe_id);
+            }
+    }
+
+    /// Apply boat paddle input (PaddleBoat 0x19)
+    pub fn apply_boat_paddle(&self, uuid: &Uuid, eid: i32, left: bool, right: bool) {
+        if let Some(p) = self.players.get(uuid) {
+            let mul: f64 = if left && right { 0.15 } else if left || right { 0.08 } else { 0.0 };
+            if mul > 0.0 {
+                let angle = p.position.yaw.to_radians() as f64;
+                let vx = -angle.sin() * mul;
+                let vz = angle.cos() * mul;
+                let new_x = p.position.x + vx;
+                let new_z = p.position.z + vz;
+                let _ = self.update_position_full(uuid, new_x, p.position.y, new_z, p.position.yaw, p.position.pitch);
+                self.broadcast_entity_move(eid, *uuid, new_x, p.position.y, new_z, p.position.yaw, p.position.pitch);
+            }
         }
     }
 

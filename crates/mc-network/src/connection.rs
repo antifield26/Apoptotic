@@ -4130,14 +4130,22 @@ async fn play_loop(
                     Err(_) => debug!("Play cookie decode failed — ignoring"),
                 }
             }
-            // Resource Pack Response (0x24) — client responds to resource pack push
+            // Resource Pack Response (0x24) — disconnect if required pack declined
             0x24 => {
                 match io.codec().decode::<mc_protocol::packets::play::ResourcePackResponse>(&frame) {
                     Ok(resp) => {
-                        debug!("Resource pack response from {}: uuid={}, result={}",
-                            username, resp.uuid, resp.result);
+                        // result: 0=success, 1=declined, 2=failed, 3=accepted
+                        if resp.result == 1 {
+                            let dc = PlayDisconnect {
+                                reason: "{\"text\":\"Resource pack is required to play on this server\"}".into(),
+                            };
+                            let _ = send_packet(io, &dc).await;
+                            info!("Kicked {}: declined required resource pack", username);
+                            return;
+                        }
+                        debug!("Resource pack response from {}: result={}", username, resp.result);
                     }
-                    Err(_) => debug!("Resource pack response decode failed — ignoring"),
+                    Err(_) => debug!("Resource pack response decode failed"),
                 }
             }
             // Player Command (0x1F) — sprint/sneak/flight input
@@ -4167,11 +4175,24 @@ async fn play_loop(
                             username, flags, sideways, forward);
                     }
             }
-            // PickItem (0x17) — middle-click block pick (creative); validate slot range
+            // PickItem (0x17) — middle-click block pick (creative mode)
             0x17 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && !payload.is_empty() {
                     let slot = payload[0] as i32;
-                    if (0..=8).contains(&slot) { debug!("{} picked item from slot {}", username, slot); }
+                    if (0..=8).contains(&slot) {
+                        // Give the block at player's crosshair target (approximate: use position)
+                        let px = server.player_manager.get(&_uuid).map(|p| p.position.x).unwrap_or(0.0) as i32;
+                        let py = server.player_manager.get(&_uuid).map(|p| p.position.y).unwrap_or(64.0) as i32;
+                        let pz = server.player_manager.get(&_uuid).map(|p| p.position.z).unwrap_or(0.0) as i32;
+                        let cp = mc_core::position::ChunkPos::new(px >> 4, pz >> 4);
+                        if let Some(chunk) = server.chunk_store.get(&cp) {
+                            let block = chunk.get_block((px & 0xF) as usize, py - 1, (pz & 0xF) as usize);
+                            if !block.is_air() {
+                                let _ = server.player_manager.add_item_to_player(&_uuid, block, 1);
+                                debug!("{} picked block {} to slot {}", username, block.id, slot);
+                            }
+                        }
+                    }
                 }
             }
             // CommandSuggestions (0x08) — tab completion: parse and echo
@@ -4222,41 +4243,55 @@ async fn play_loop(
                     info!("Difficulty lock: {} (by {})", locked, username);
                 }
             }
-            // EditBook (0x0E) — parse book content
+            // EditBook (0x0E) — write pages to item NBT via PlayerManager
             0x0E => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) {
-                    let (slot, _) = mc_protocol::codec::read_varint_enum(&payload).unwrap_or((0, 0));
-                    debug!("Book edited by {} in slot {}", username, slot);
+                    let (slot, off) = mc_protocol::codec::read_varint_enum(&payload).unwrap_or((0, 0));
+                    let text = String::from_utf8_lossy(&payload[off..]).to_string();
+                    let _ = server.player_manager.update_item_nbt_at_slot(&_uuid, slot, &text);
+                    info!("Book edited by {} in slot {} ({} chars)", username, slot, text.len());
                 }
             }
-            // AdvancementTab (0x11) — client requests advancement tab; validate action
+            // AdvancementTab (0x11) — open/close advancement screen
             0x11 => {
-                if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && !payload.is_empty() {
-                    let action = payload[0]; // 0=open tab, 1=close screen
-                    debug!("{} advancement tab action={}", username, action);
-                }
-            }
-            // RenameItem (0x12) — anvil rename: store name in held item NBT
-            0x12 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) {
-                    let (name_len, off) = mc_protocol::codec::read_varint_enum(&payload).unwrap_or((0, 0));
-                    if name_len > 0 && name_len < 64 {
-                        let name = String::from_utf8_lossy(&payload[off..off+name_len as usize]);
-                        debug!("{} renamed item to '{}'", username, name);
+                    let action = payload.first().copied().unwrap_or(0);
+                    if action == 0 && payload.len() > 1 {
+                        let tab_id = String::from_utf8_lossy(&payload[1..]).to_string();
+                        info!("{} opened advancement tab '{}'", username, tab_id);
+                    } else {
+                        debug!("{} advancement tab action={}", username, action);
                     }
                 }
             }
-            // RecipeBookData (0x13) — client recipe book state sync; validate and accept
+            // RenameItem (0x12) — anvil rename: store display name in held item NBT
+            0x12 => {
+                if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) {
+                    let (name_len, off) = mc_protocol::codec::read_varint_enum(&payload).unwrap_or((0, 0));
+                    if name_len > 0 && name_len < 64 && off + name_len as usize <= payload.len() {
+                        let name = String::from_utf8_lossy(&payload[off..off + name_len as usize]).to_string();
+                        let _ = server.player_manager.set_held_item_name(&_uuid, &name);
+                        info!("{} renamed item to '{}'", username, name);
+                    }
+                }
+            }
+            // RecipeBookData (0x13) — track player's unlocked recipes
             0x13 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && payload.len() >= 2 {
                     let recipe_id = u16::from_be_bytes([payload[0], payload[1]]);
+                    server.player_manager.add_known_recipe(&_uuid, recipe_id);
                     debug!("{} recipe book: recipe={}", username, recipe_id);
                 }
             }
-            // PaddleBoat (0x19) — boat steering: parse and log
+            // PaddleBoat (0x19) — boat steering: apply movement to ridden vehicle
             0x19 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && payload.len() >= 2 {
-                    debug!("Boat paddle: left={}, right={}", payload[0] != 0, payload[1] != 0);
+                    let left = payload[0] != 0;
+                    let right = payload[1] != 0;
+                    if left || right {
+                        let eid = server.player_manager.get_entity_id(&_uuid).unwrap_or(0);
+                        server.player_manager.apply_boat_paddle(&_uuid, eid, left, right);
+                    }
                 }
             }
             // VehicleMoveC2S (0x20) — vehicle position from client
