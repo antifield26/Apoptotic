@@ -350,7 +350,6 @@ impl DatapackLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     fn create_test_pack(dir: &Path, name: &str) -> PathBuf {
         let pack_dir = dir.join(name);

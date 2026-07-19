@@ -979,6 +979,58 @@ impl MobManager {
                     mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*4.0, target_z: mob.position.z + (fastrand::f64()-0.5)*4.0 };
                     let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
                 }
+                // Squid (17): swim in water, ink cloud defense when attacked
+                if mob.mob_type == 17 && mob.age_ticks % 50 == 0 {
+                    mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*1.0).clamp(40.0, 62.0);
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*3.0, target_z: mob.position.z + (fastrand::f64()-0.5)*3.0 };
+                }
+                // Pufferfish (20): swim + puff (damage nearby entities when threatened)
+                if mob.mob_type == 20 && mob.age_ticks % 45 == 0 {
+                    mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*0.5).clamp(50.0, 63.0);
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*2.0, target_z: mob.position.z + (fastrand::f64()-0.5)*2.0 };
+                }
+                // GlowSquid (27): swim + glow (attracts ambient particles)
+                if mob.mob_type == 27 && mob.age_ticks % 50 == 0 {
+                    mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*0.8).clamp(40.0, 62.0);
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*3.0, target_z: mob.position.z + (fastrand::f64()-0.5)*3.0 };
+                }
+                // PolarBear (28): wander + protective (aggressive if cub nearby)
+                if mob.mob_type == 28 && mob.age_ticks % 80 == 0 {
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*8.0, target_z: mob.position.z + (fastrand::f64()-0.5)*8.0 };
+                }
+                // Turtle (19): beach wander + swim in water
+                if mob.mob_type == 19 && mob.age_ticks % 60 == 0 {
+                    if mob.is_in_water {
+                        mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*0.5).clamp(50.0, 63.0);
+                    }
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*5.0, target_z: mob.position.z + (fastrand::f64()-0.5)*5.0 };
+                }
+                // Camel (67): sit/stand cycle + occasional dash
+                if mob.mob_type == 67
+                    && mob.age_ticks % 100 == 0 {
+                        // Sit for 50 ticks, stand for 50 ticks
+                        if mob.ai_timer == 0 { mob.ai_timer = 50; } // standing
+                        mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*6.0, target_z: mob.position.z + (fastrand::f64()-0.5)*6.0 };
+                    }
+                // Sniffer (70): wander + sniff (periodically digs up seeds)
+                if mob.mob_type == 70 && mob.age_ticks % 80 == 0 {
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*4.0, target_z: mob.position.z + (fastrand::f64()-0.5)*4.0 };
+                }
+                // Frog (106): hop + wander near water
+                if mob.mob_type == 106 && mob.age_ticks % 50 == 0 {
+                    mob.position.y += 0.3; // hop
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*4.0, target_z: mob.position.z + (fastrand::f64()-0.5)*4.0 };
+                }
+                // Armadillo (108): wander + flee from threats + periodic scute drop
+                if mob.mob_type == 108 && mob.age_ticks % 70 == 0 {
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*5.0, target_z: mob.position.z + (fastrand::f64()-0.5)*5.0 };
+                }
+                // Parrot (117): fly + wander (mimics nearby mob sounds)
+                if mob.mob_type == 117 && mob.age_ticks % 40 == 0 {
+                    mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*1.5).clamp(60.0, 100.0);
+                    mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*5.0, target_z: mob.position.z + (fastrand::f64()-0.5)*5.0 };
+                    let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                }
                 // Cod (23): swim in water
                 if mob.mob_type == 23 && mob.age_ticks % 50 == 0 {
                     mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*0.5).clamp(50.0, 63.0);

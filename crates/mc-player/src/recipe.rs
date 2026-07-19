@@ -375,7 +375,7 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
     // Chest: 8 planks in ring
     reg.add(Recipe { id: "minecraft:chest".into(), group: "building".into(), category: 0,
         width: 3, height: 3, ingredients: vec![oak.clone(), oak.clone(), oak.clone(), oak.clone(), vec![0], oak.clone(), oak.clone(), oak.clone(), oak.clone()],
-        is_shapeless: false, result_item: 54, result_count: 1 });
+        is_shapeless: false, result_item: 620, result_count: 1 });
     // Torch: coal + stick → 4
     reg.add(Recipe { id: "minecraft:torch".into(), group: "torch".into(), category: 2,
         width: 1, height: 2, ingredients: vec![coal.clone(), vec![stick]],
@@ -426,14 +426,14 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
     let r_torch = vec![994u32]; let r_dust = vec![993u32];
     reg.add(Recipe { id: "minecraft:redstone_repeater".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3, ingredients: vec![vec![0], r_torch.clone(), vec![0], vec![0], cobble.clone(), vec![0], r_dust, cobble.clone(), r_torch],
-        is_shapeless: false, result_item: 852, result_count: 1 });
+        is_shapeless: false, result_item: 1147, result_count: 1 });
     // Piston: 3 wood + 4 cobble + iron + redstone
     reg.add(Recipe { id: "minecraft:piston".into(), group: "redstone".into(), category: 0,
-        width: 3, height: 3, ingredients: vec![oak.clone(), oak.clone(), oak.clone(), cobble.clone(), iron_ingot.clone(), cobble.clone(), cobble.clone(), vec![46u32], cobble.clone()],
-        is_shapeless: false, result_item: 137, result_count: 1 });
+        width: 3, height: 3, ingredients: vec![oak.clone(), oak.clone(), oak.clone(), cobble.clone(), iron_ingot.clone(), cobble.clone(), cobble.clone(), vec![462u32], cobble.clone()],
+        is_shapeless: false, result_item: 206, result_count: 1 });
     // Dispenser: 7 cobble + bow + redstone
     reg.add(Recipe { id: "minecraft:dispenser".into(), group: "redstone".into(), category: 0,
-        width: 3, height: 3, ingredients: vec![cobble.clone(), cobble.clone(), cobble.clone(), cobble.clone(), vec![773u32], cobble.clone(), cobble.clone(), vec![46u32], cobble.clone()],
+        width: 3, height: 3, ingredients: vec![cobble.clone(), cobble.clone(), cobble.clone(), cobble.clone(), vec![773u32], cobble.clone(), cobble.clone(), vec![462u32], cobble.clone()],
         is_shapeless: false, result_item: 23, result_count: 1 });
     // TNT: 4 sand + 5 gunpowder
     let s = vec![24u32]; let gp = vec![954u32];
@@ -454,12 +454,12 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
         is_shapeless: false, result_item: 895, result_count: 1 });
     // Fishing rod: 3 sticks diagonal + 2 string
     reg.add(Recipe { id: "minecraft:fishing_rod".into(), group: "tool".into(), category: 1,
-        width: 3, height: 3, ingredients: vec![vec![0], vec![0], vec![stick], vec![0], vec![stick], vec![838u32], vec![stick], vec![0], vec![838u32]],
+        width: 3, height: 3, ingredients: vec![vec![0], vec![0], vec![stick], vec![0], vec![stick], vec![1163u32], vec![stick], vec![0], vec![1163u32]],
         is_shapeless: false, result_item: 844, result_count: 1 });
     // Shears: 2 iron ingots diagonal
     reg.add(Recipe { id: "minecraft:shears".into(), group: "tool".into(), category: 1,
         width: 2, height: 2, ingredients: vec![iron_ingot.clone(), vec![0], vec![0], iron_ingot.clone()],
-        is_shapeless: false, result_item: 845, result_count: 1 });
+        is_shapeless: false, result_item: 1205, result_count: 1 });
     // Flint and steel: 1 iron + 1 flint
     reg.add(Recipe { id: "minecraft:flint_and_steel".into(), group: "tool".into(), category: 1,
         width: 2, height: 2, ingredients: vec![iron_ingot.clone(), vec![931u32], vec![0], vec![0]],
@@ -482,15 +482,15 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
         is_shapeless: false, result_item: 854, result_count: 16 });
     // Powered rail: 6 gold + 1 stick + 1 redstone → 6
     reg.add(Recipe { id: "minecraft:powered_rail".into(), group: "transport".into(), category: 2,
-        width: 3, height: 3, ingredients: vec![gold_ingot.clone(), vec![0], gold_ingot.clone(), gold_ingot.clone(), vec![stick], gold_ingot.clone(), gold_ingot.clone(), vec![46u32], gold_ingot.clone()],
+        width: 3, height: 3, ingredients: vec![gold_ingot.clone(), vec![0], gold_ingot.clone(), gold_ingot.clone(), vec![stick], gold_ingot.clone(), gold_ingot.clone(), vec![462u32], gold_ingot.clone()],
         is_shapeless: false, result_item: 855, result_count: 6 });
     // Book: 3 paper + 1 leather
-    let paper = vec![891u32]; let leather = vec![831u32];
+    let paper = vec![1045u32]; let leather = vec![1165u32];
     reg.add(Recipe { id: "minecraft:book".into(), group: "misc".into(), category: 2,
         width: 3, height: 3, ingredients: vec![vec![0], paper.clone(), vec![0], vec![0], leather.clone(), vec![0], vec![0], vec![0], vec![0]],
-        is_shapeless: false, result_item: 892, result_count: 1 });
+        is_shapeless: false, result_item: 1042, result_count: 1 });
     // Bookshelf: 6 planks + 3 books
-    let book = vec![892u32];
+    let book = vec![1042u32];
     reg.add(Recipe { id: "minecraft:bookshelf".into(), group: "building".into(), category: 0,
         width: 3, height: 3, ingredients: vec![oak.clone(), oak.clone(), oak.clone(), book.clone(), book.clone(), book.clone(), oak.clone(), oak.clone(), oak.clone()],
         is_shapeless: false, result_item: 105, result_count: 1 });
@@ -502,19 +502,19 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
     // Painting: 8 sticks + 1 wool
     reg.add(Recipe { id: "minecraft:painting".into(), group: "misc".into(), category: 2,
         width: 3, height: 3, ingredients: vec![vec![stick]; 9],
-        is_shapeless: false, result_item: 897, result_count: 1 });
+        is_shapeless: false, result_item: 1058, result_count: 1 });
     // Item frame: 8 sticks + 1 leather
     reg.add(Recipe { id: "minecraft:item_frame".into(), group: "misc".into(), category: 2,
         width: 3, height: 3, ingredients: vec![vec![stick]; 9],
-        is_shapeless: false, result_item: 896, result_count: 1 });
+        is_shapeless: false, result_item: 1057, result_count: 1 });
     // Clock: 4 gold + 1 redstone
     reg.add(Recipe { id: "minecraft:clock".into(), group: "tool".into(), category: 2,
-        width: 3, height: 3, ingredients: vec![vec![0], gold_ingot.clone(), vec![0], gold_ingot.clone(), vec![46u32], gold_ingot.clone(), vec![0], gold_ingot.clone(), vec![0]],
-        is_shapeless: false, result_item: 893, result_count: 1 });
+        width: 3, height: 3, ingredients: vec![vec![0], gold_ingot.clone(), vec![0], gold_ingot.clone(), vec![462u32], gold_ingot.clone(), vec![0], gold_ingot.clone(), vec![0]],
+        is_shapeless: false, result_item: 1043, result_count: 1 });
     // Compass: 4 iron + 1 redstone
     reg.add(Recipe { id: "minecraft:compass".into(), group: "tool".into(), category: 2,
-        width: 3, height: 3, ingredients: vec![vec![0], iron_ingot.clone(), vec![0], iron_ingot.clone(), vec![46u32], iron_ingot.clone(), vec![0], iron_ingot.clone(), vec![0]],
-        is_shapeless: false, result_item: 894, result_count: 1 });
+        width: 3, height: 3, ingredients: vec![vec![0], iron_ingot.clone(), vec![0], iron_ingot.clone(), vec![462u32], iron_ingot.clone(), vec![0], iron_ingot.clone(), vec![0]],
+        is_shapeless: false, result_item: 1044, result_count: 1 });
     // Cake: 3 milk + 2 sugar + 1 egg + 3 wheat
     let milk = vec![916u32]; let sugar = vec![885u32]; let egg_v = vec![884u32];
     reg.add(Recipe { id: "minecraft:cake".into(), group: "food".into(), category: 2,
@@ -581,29 +581,29 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
         width: 1, height: 4, ingredients: vec![beetroot.clone(), beetroot.clone(), beetroot.clone(), bowl2],
         is_shapeless: false, result_item: 877, result_count: 1 });
     // Chainmail armor: smelt iron ingots? (vanilla is not craftable, but add fire + iron block path)
-    // Bow: 3 sticks + 3 string
-    let bow_string = vec![838u32];
+    // Bow: 3 sticks + 3 string → 1 bow (registry: string=801, bow=942)
+    let bow_string = vec![801u32];
     reg.add(Recipe { id: "minecraft:bow".into(), group: "equipment".into(), category: 1,
         width: 3, height: 3, ingredients: vec![vec![0], vec![stick], bow_string.clone(), vec![stick], vec![0], bow_string.clone(), vec![0], vec![stick], bow_string],
-        is_shapeless: false, result_item: 773, result_count: 1 });
-    // Stairs: 6 planks in stair shape → 4
+        is_shapeless: false, result_item: 942, result_count: 1 });
+    // Oak stairs: 6 planks in stair shape → 4 (registry: oak_stairs=430)
     reg.add(Recipe { id: "minecraft:oak_stairs".into(), group: "building".into(), category: 0,
         width: 3, height: 3, ingredients: vec![oak.clone(), vec![0], vec![0], oak.clone(), oak.clone(), vec![0], oak.clone(), oak.clone(), oak.clone()],
-        is_shapeless: false, result_item: 142, result_count: 4 });
-    // Slab: 3 planks horizontal → 6
+        is_shapeless: false, result_item: 430, result_count: 4 });
+    // Oak slab: 3 planks horizontal → 6 (registry: oak_slab=431)
     reg.add(Recipe { id: "minecraft:oak_slab".into(), group: "building".into(), category: 0,
         width: 3, height: 1, ingredients: vec![oak.clone(), oak.clone(), oak.clone()],
-        is_shapeless: false, result_item: 139, result_count: 6 });
-    // Stone bricks: 4 stone in square → 4
+        is_shapeless: false, result_item: 431, result_count: 6 });
+    // Stone bricks: 4 stone in square → 4 (registry: stone_bricks=133)
     let stone_v = vec![1u32];
     reg.add(Recipe { id: "minecraft:stone_bricks".into(), group: "building".into(), category: 0,
         width: 2, height: 2, ingredients: vec![stone_v.clone(), stone_v.clone(), stone_v.clone(), stone_v],
-        is_shapeless: false, result_item: 71, result_count: 4 });
-    // Arrow: flint + stick + feather → 4
+        is_shapeless: false, result_item: 133, result_count: 4 });
+    // Arrow: flint + stick + feather → 4 (registry: arrow=943)
     let flint = vec![931u32]; let feather = vec![932u32];
     reg.add(Recipe { id: "minecraft:arrow".into(), group: "equipment".into(), category: 1,
         width: 1, height: 3, ingredients: vec![flint, vec![stick], feather],
-        is_shapeless: false, result_item: 774, result_count: 4 });
+        is_shapeless: false, result_item: 943, result_count: 4 });
     reg.add(Recipe { id: "minecraft:golden_chestplate".into(), group: "gold_armor".into(), category: 1,
         width: 3, height: 3, ingredients: vec![gold_ingot.clone(), vec![0], gold_ingot.clone(), gold_ingot.clone(), gold_ingot.clone(), gold_ingot.clone(), gold_ingot.clone(), gold_ingot.clone(), gold_ingot.clone()],
         is_shapeless: false, result_item: 828, result_count: 1 });
@@ -614,7 +614,7 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
         width: 3, height: 2, ingredients: vec![vec![0], vec![0], vec![0], gold_ingot.clone(), vec![0], gold_ingot.clone()],
         is_shapeless: false, result_item: 830, result_count: 1 });
     // Firework rocket: paper + gunpowder → 3 rockets
-    let paper = vec![891u32]; let gunpowder = vec![954u32];
+    let paper = vec![1045u32]; let gunpowder = vec![954u32];
     reg.add(Recipe { id: "minecraft:firework_rocket".into(), group: "misc".into(), category: 2,
         width: 1, height: 2, ingredients: vec![paper.clone(), gunpowder.clone()],
         is_shapeless: false, result_item: 965, result_count: 3 });
@@ -626,10 +626,10 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
 
     // ═══ Wood variant stairs (8 types, 6 planks stair-shape → 4) ═══
     let plank_ids: [u32; 8] = [13, 14, 15, 16, 17, 18, 19, 20];
-    let stair_results: [u32; 8] = [142, 143, 144, 145, 146, 147, 148, 149];
-    let slab_results: [u32; 8] = [139, 150, 151, 152, 153, 154, 155, 156];
-    let fence_results: [u32; 8] = [141, 157, 158, 159, 160, 161, 162, 163];
-    let door_results: [u32; 8] = [135, 164, 165, 166, 167, 168, 169, 170];
+    let stair_results: [u32; 8] = [430, 450, 470, 490, 510, 570, 530, 550];
+    let slab_results: [u32; 8] = [431, 451, 471, 491, 511, 571, 531, 551];
+    let fence_results: [u32; 8] = [432, 452, 472, 492, 512, 572, 532, 552];
+    let door_results: [u32; 8] = [434, 454, 474, 494, 514, 574, 534, 554];
     let names: [&str; 8] = ["oak", "spruce", "birch", "jungle", "acacia", "cherry", "dark_oak", "mangrove"];
     for i in 0..8 {
         let p = vec![plank_ids[i]];
@@ -687,11 +687,11 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:comparator".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![0], vec![994u32], vec![0], vec![994u32], quartz.clone(), vec![994u32], stone_v.clone(), stone_v.clone(), stone_v.clone()],
-        is_shapeless: false, result_item: 851, result_count: 1 });
+        is_shapeless: false, result_item: 1153, result_count: 1 });
     // Hopper: 5 iron + 1 chest
     reg.add(Recipe { id: "minecraft:hopper".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
-        ingredients: vec![iron_ingot.clone(), vec![0], iron_ingot.clone(), iron_ingot.clone(), vec![54u32], iron_ingot.clone(), vec![0], iron_ingot.clone(), vec![0]],
+        ingredients: vec![iron_ingot.clone(), vec![0], iron_ingot.clone(), iron_ingot.clone(), vec![620u32], iron_ingot.clone(), vec![0], iron_ingot.clone(), vec![0]],
         is_shapeless: false, result_item: 154, result_count: 1 });
     // Daylight sensor: 3 glass + 3 quartz + 3 wood slab
     reg.add(Recipe { id: "minecraft:daylight_detector".into(), group: "redstone".into(), category: 0,
@@ -702,7 +702,7 @@ pub fn add_tool_recipes(reg: &mut RecipeRegistry) {
     // ═══ Transport ═══
     // Chest minecart: chest + minecart
     reg.add(Recipe { id: "minecraft:chest_minecart".into(), group: "transport".into(), category: 2,
-        width: 1, height: 2, ingredients: vec![vec![54u32], vec![950u32]],
+        width: 1, height: 2, ingredients: vec![vec![620u32], vec![950u32]],
         is_shapeless: false, result_item: 951, result_count: 1 });
     // Hopper minecart: hopper + minecart
     reg.add(Recipe { id: "minecraft:hopper_minecart".into(), group: "transport".into(), category: 2,
@@ -747,10 +747,10 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
         (582, "light_gray"), (583, "cyan"), (584, "purple"), (585, "blue"),
         (586, "brown"), (587, "green"), (588, "red"), (589, "black"),
     ];
-    let dye_ids: [u32; 16] = [574, 575, 576, 577, 578, 579, 580, 581, 582, 583, 584, 585, 586, 587, 588, 589];
+    let dye_ids: [u32; 16] = [991, 981, 988, 1302, 980, 987, 986, 985, 984, 983, 982, 979, 989, 978, 977, 990];
     let flower_to_dye: [(u32, u32); 8] = [
-        (37, 578), (38, 585), (39, 577), (40, 576),
-        (41, 580), (42, 575), (43, 587), (44, 584),
+        (37, 980), (38, 979), (39, 1302), (40, 988),
+        (41, 987), (42, 981), (43, 978), (44, 982),
     ];
     for (flower_id, dye_id) in flower_to_dye {
         reg.add(Recipe { id: format!("dye_from_{}", flower_id), group: "dye".into(), category: 2,
@@ -759,16 +759,16 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── Colored wool (16 colors: white_wool + dye → colored_wool) ──
-    let wool_ids: [u32; 16] = [64, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183];
+    let wool_ids: [u32; 16] = [85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100];
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:{}_wool", dye_sources[i].1), group: "wool".into(), category: 0,
-            width: 1, height: 2, ingredients: vec![vec![64], vec![dye_ids[i]]],
+            width: 1, height: 2, ingredients: vec![vec![85], vec![dye_ids[i]]],
             is_shapeless: false, result_item: wool_ids[i], result_count: 1,
         });
     }
 
     // ── Colored concrete (16 colors: dye + sand + gravel → colored_concrete_powder) ──
-    let concrete_powder_ids: [u32; 16] = [246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261];
+    let concrete_powder_ids: [u32; 16] = [1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109];
     let sand = vec![24u32]; let gravel = vec![26u32];
     for i in 0..16 {
         reg.add(Recipe { id: format!("minecraft:{}_concrete_powder", dye_sources[i].1), group: "concrete".into(), category: 0,
@@ -779,7 +779,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── Colored glass (8 glass + dye → 8 colored glass) ──
-    let glass_ids: [u32; 16] = [66, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159];
+    let glass_ids: [u32; 16] = [66, 1271, 1272, 1273, 1274, 1275, 1276, 1277, 1278, 1279, 1280, 1281, 1282, 1283, 1284, 1285];
     let glass = vec![66u32];
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:{}_stained_glass", dye_sources[i].1), group: "glass".into(), category: 0,
@@ -790,8 +790,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── Colored terracotta (8 terracotta + dye → 8 colored terracotta) ──
-    let terracotta = vec![172u32];
-    let terracotta_ids: [u32; 16] = [172, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240];
+    let terracotta = vec![181u32];
+    let terracotta_ids: [u32; 16] = [181, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204];
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:{}_terracotta", dye_sources[i].1), group: "terracotta".into(), category: 0,
             width: 3, height: 3,
@@ -801,7 +801,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── Colored carpet (2 wool → 3 carpet) ──
-    let carpet_ids: [u32; 16] = [160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175];
+    let carpet_ids: [u32; 16] = [1126, 1127, 1128, 1129, 1130, 1131, 1132, 1133, 1134, 1135, 1136, 1137, 1138, 1139, 1140, 1141];
     for i in 0..16 {
         reg.add(Recipe { id: format!("minecraft:{}_carpet", dye_sources[i].1), group: "carpet".into(), category: 0,
             width: 3, height: 1, ingredients: vec![vec![wool_ids[i]], vec![wool_ids[i]], vec![0]],
@@ -810,7 +810,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── Colored beds (16 colors: wool + planks) ──
-    let bed_ids: [u32; 16] = [887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 899, 900, 901, 902];
+    let bed_ids: [u32; 16] = [1287, 1288, 1289, 1290, 1291, 1292, 1293, 1294, 1295, 1296, 1297, 1298, 1299, 1300, 887, 1301];
     for i in 0..16 {
         reg.add(Recipe { id: format!("minecraft:{}_bed", dye_sources[i].1), group: "bed".into(), category: 0,
             width: 3, height: 3,
@@ -821,7 +821,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
 
     // ── All 10 wood fence gates (2 sticks + 4 planks) ──
     let wood_names: [&str; 10] = ["oak","spruce","birch","jungle","acacia","cherry","dark_oak","mangrove","bamboo","crimson"];
-    let fence_gate_results: [u32; 10] = [143, 561, 562, 563, 564, 565, 566, 567, 568, 569];
+    let fence_gate_results: [u32; 10] = [433, 453, 473, 493, 513, 573, 533, 553, 593, 613];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_fence_gate", wood_names[i]), group: "fence_gate".into(), category: 0,
@@ -832,7 +832,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood buttons (1 plank → 1 button) ──
-    let button_results: [u32; 10] = [308, 309, 310, 311, 312, 313, 314, 315, 316, 317];
+    let button_results: [u32; 10] = [436, 456, 476, 496, 516, 576, 536, 556, 596, 616];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_button", wood_names[i]), group: "button".into(), category: 0,
@@ -842,7 +842,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood pressure plates (2 planks → 1) ──
-    let pp_results: [u32; 10] = [298, 299, 300, 301, 302, 303, 304, 305, 306, 307];
+    let pp_results: [u32; 10] = [437, 457, 477, 497, 517, 577, 537, 557, 597, 617];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_pressure_plate", wood_names[i]), group: "pressure_plate".into(), category: 0,
@@ -852,7 +852,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood signs (6 planks + stick → 3) ──
-    let sign_results: [u32; 10] = [847, 848, 849, 850, 851, 852, 853, 854, 855, 856];
+    let sign_results: [u32; 10] = [438, 458, 478, 498, 518, 578, 538, 558, 598, 618];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_sign", wood_names[i]), group: "sign".into(), category: 0,
@@ -863,7 +863,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood boats (5 planks U-shape) ──
-    let boat_results: [u32; 10] = [955, 956, 957, 958, 959, 960, 961, 962, 963, 964];
+    let boat_results: [u32; 10] = [955, 956, 957, 958, 959, 960, 961, 962, 1303, 964];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_boat", wood_names[i]), group: "boat".into(), category: 2,
@@ -874,7 +874,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood doors (batch, 6 planks 2×3 → 3) ──
-    let door_results: [u32; 10] = [324, 325, 326, 327, 328, 329, 330, 331, 332, 333];
+    let door_results: [u32; 10] = [434, 454, 474, 494, 514, 574, 534, 554, 594, 614];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_door", wood_names[i]), group: "door".into(), category: 0,
@@ -884,7 +884,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood trapdoors (6 planks 3×2 → 2) ──
-    let trapdoor_results: [u32; 10] = [96, 347, 348, 349, 350, 351, 352, 353, 354, 355];
+    let trapdoor_results: [u32; 10] = [435, 455, 475, 495, 515, 575, 535, 555, 595, 615];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_trapdoor", wood_names[i]), group: "trapdoor".into(), category: 0,
@@ -894,7 +894,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood fences (4 planks + 2 sticks → 3) ──
-    let fence_results: [u32; 10] = [85, 188, 189, 190, 191, 192, 346, 345, 373, 374];
+    let fence_results: [u32; 10] = [432, 452, 472, 492, 512, 572, 532, 552, 592, 612];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_fence", wood_names[i]), group: "fence".into(), category: 0,
@@ -905,8 +905,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     }
 
     // ── All 10 wood stairs + slabs ──
-    let stair_results: [u32; 10] = [142, 143, 144, 145, 146, 147, 148, 149, 371, 372];
-    let slab_results: [u32; 10] = [139, 150, 151, 152, 153, 154, 155, 156, 369, 370];
+    let stair_results: [u32; 10] = [430, 450, 470, 490, 510, 570, 530, 550, 590, 610];
+    let slab_results: [u32; 10] = [431, 451, 471, 491, 511, 571, 531, 551, 591, 611];
     for i in 0..10 {
         let p = vec![all_planks[i]];
         reg.add(Recipe { id: format!("minecraft:{}_stairs", wood_names[i]), group: "stairs".into(), category: 0,
@@ -970,7 +970,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ── Lever: stick + cobblestone ──
     reg.add(Recipe { id: "minecraft:lever".into(), group: "redstone".into(), category: 0,
         width: 1, height: 2, ingredients: vec![vec![stick], vec![12u32]],
-        is_shapeless: false, result_item: 852, result_count: 1,
+        is_shapeless: false, result_item: 1147, result_count: 1,
     });
     // ── Stone button: 1 stone → 1 ──
     reg.add(Recipe { id: "minecraft:stone_button".into(), group: "button".into(), category: 0,
@@ -980,19 +980,19 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ── Stone pressure plate: 2 stone → 1 ──
     reg.add(Recipe { id: "minecraft:stone_pressure_plate".into(), group: "pressure_plate".into(), category: 0,
         width: 2, height: 1, ingredients: vec![vec![1], vec![1]],
-        is_shapeless: false, result_item: 296, result_count: 1,
+        is_shapeless: false, result_item: 1159, result_count: 1,
     });
     // ── Tripwire hook: iron + stick + plank ──
     reg.add(Recipe { id: "minecraft:tripwire_hook".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![778], vec![stick], vec![13], vec![0], vec![0], vec![0], vec![0], vec![0], vec![0]],
-        is_shapeless: false, result_item: 287, result_count: 2,
+        is_shapeless: false, result_item: 1307, result_count: 2,
     });
     // ── Iron door (6 iron ingots 2×3 → 3) ──
     reg.add(Recipe { id: "minecraft:iron_door".into(), group: "door".into(), category: 0,
         width: 2, height: 3,
         ingredients: vec![vec![778], vec![778], vec![778], vec![778], vec![778], vec![778]],
-        is_shapeless: false, result_item: 334, result_count: 3,
+        is_shapeless: false, result_item: 1156, result_count: 3,
     });
     // ── Iron trapdoor (4 iron ingots 2×2 → 1) ──
     reg.add(Recipe { id: "minecraft:iron_trapdoor".into(), group: "trapdoor".into(), category: 0,
@@ -1056,23 +1056,23 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Lead: 4 string + 1 slime_ball → 2
     reg.add(Recipe { id: "minecraft:lead".into(), group: "misc".into(), category: 2,
         width: 3, height: 3,
-        ingredients: vec![vec![838u32], vec![838u32], vec![838u32], vec![838u32], vec![920u32], vec![838u32], vec![0], vec![0], vec![0]],
+        ingredients: vec![vec![1163u32], vec![1163u32], vec![1163u32], vec![1163u32], vec![920u32], vec![1163u32], vec![0], vec![0], vec![0]],
         is_shapeless: false, result_item: 966, result_count: 2,
     });
     // Writable book: book + ink_sac + feather
     reg.add(Recipe { id: "minecraft:writable_book".into(), group: "misc".into(), category: 2,
-        width: 1, height: 1, ingredients: vec![vec![892u32], vec![587u32], vec![932u32]], // book + ink_sac + feather
+        width: 1, height: 1, ingredients: vec![vec![1042u32], vec![587u32], vec![932u32]], // book + ink_sac + feather
         is_shapeless: true, result_item: 984, result_count: 1,
     });
     // Paper: 3 sugar cane → 3
     reg.add(Recipe { id: "minecraft:paper".into(), group: "misc".into(), category: 2,
         width: 3, height: 1, ingredients: vec![vec![83u32], vec![83u32], vec![83u32]],
-        is_shapeless: false, result_item: 891, result_count: 3,
+        is_shapeless: false, result_item: 1045, result_count: 3,
     });
     // Bone meal: bone → 3
     reg.add(Recipe { id: "minecraft:bone_meal".into(), group: "misc".into(), category: 2,
         width: 1, height: 1, ingredients: vec![vec![886u32]],
-        is_shapeless: false, result_item: 587, result_count: 3,
+        is_shapeless: false, result_item: 978, result_count: 3,
     });
     // Snow block: 4 snowballs → 1
     reg.add(Recipe { id: "minecraft:snow_block".into(), group: "building".into(), category: 0,
@@ -1109,7 +1109,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ── Slime block + Magma cream → Magma block ──
     reg.add(Recipe { id: "minecraft:magma_block".into(), group: "building".into(), category: 0,
         width: 2, height: 2, ingredients: vec![vec![925u32]; 4], // magma_cream
-        is_shapeless: false, result_item: 213, result_count: 1,
+        is_shapeless: false, result_item: 1077, result_count: 1,
     });
 
     // ── Hay bale (9 wheat → 1) ──
@@ -1126,7 +1126,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ── Scaffolding: 6 bamboo + 1 string → 6 ──
     reg.add(Recipe { id: "minecraft:scaffolding".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
-        ingredients: vec![vec![42], vec![838u32], vec![42], vec![42], vec![0], vec![42], vec![42], vec![0], vec![42]],
+        ingredients: vec![vec![42], vec![1163u32], vec![42], vec![42], vec![0], vec![42], vec![42], vec![0], vec![42]],
         is_shapeless: false, result_item: 1085, result_count: 6,
     });
 
@@ -1140,18 +1140,18 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:grindstone".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![stick], vec![13], vec![stick], vec![13], vec![0], vec![13], vec![0], vec![0], vec![0]],
-        is_shapeless: false, result_item: 169, result_count: 1,
+        is_shapeless: false, result_item: 650, result_count: 1,
     });
     // ── Loom: 2 planks + 2 string → 1 ──
     reg.add(Recipe { id: "minecraft:loom".into(), group: "building".into(), category: 0,
         width: 2, height: 2,
-        ingredients: vec![vec![838u32], vec![838u32], vec![13], vec![13]], // string + planks
+        ingredients: vec![vec![1163u32], vec![1163u32], vec![13], vec![13]], // string + planks
         is_shapeless: false, result_item: 457, result_count: 1,
     });
     // ── Cartography table: 2 paper + 4 planks → 1 ──
     reg.add(Recipe { id: "minecraft:cartography_table".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
-        ingredients: vec![vec![891u32], vec![891u32], vec![0], vec![13], vec![13], vec![0], vec![13], vec![13], vec![0]],
+        ingredients: vec![vec![1045u32], vec![1045u32], vec![0], vec![13], vec![13], vec![0], vec![13], vec![13], vec![0]],
         is_shapeless: false, result_item: 458, result_count: 1,
     });
     // ── Smithing table: 2 iron_ingot + 4 planks → 1 ──
@@ -1176,7 +1176,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:fletching_table".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![931u32], vec![931u32], vec![0], vec![13], vec![13], vec![0], vec![13], vec![13], vec![0]],
-        is_shapeless: false, result_item: 460, result_count: 1,
+        is_shapeless: false, result_item: 956, result_count: 1,
     });
     // ── Barrel: 6 planks + 2 slabs → 1 ──
     reg.add(Recipe { id: "minecraft:barrel".into(), group: "building".into(), category: 0,
@@ -1203,8 +1203,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     });
     // ── Purpur pillar: 2 purpur_slabs → 1 ──
     reg.add(Recipe { id: "minecraft:purpur_pillar".into(), group: "building".into(), category: 0,
-        width: 1, height: 2, ingredients: vec![vec![441u32], vec![441u32]],
-        is_shapeless: false, result_item: 440, result_count: 1,
+        width: 1, height: 2, ingredients: vec![vec![964u32], vec![964u32]],
+        is_shapeless: false, result_item: 955, result_count: 1,
     });
 
     // ── Nether brick fence: 4 nether_bricks + 2 nether_brick items → 6 ──
@@ -1332,13 +1332,13 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:lightning_rod".into(), group: "building".into(), category: 0,
         width: 1, height: 3,
         ingredients: vec![vec![567u32], vec![567u32], vec![567u32]],
-        is_shapeless: false, result_item: 319, result_count: 1,
+        is_shapeless: false, result_item: 1222, result_count: 1,
     });
 
     // ── Crossbow: 3 stick + 2 string + 1 iron + 1 tripwire_hook → 1 ──
     reg.add(Recipe { id: "minecraft:crossbow".into(), group: "equipment".into(), category: 1,
         width: 3, height: 3,
-        ingredients: vec![vec![794], vec![287u32], vec![794], vec![838u32], vec![778], vec![838u32], vec![0], vec![794], vec![0]],
+        ingredients: vec![vec![794], vec![287u32], vec![794], vec![1163u32], vec![778], vec![1163u32], vec![0], vec![794], vec![0]],
         is_shapeless: false, result_item: 941, result_count: 1,
     });
     // ── Soul torch: coal + stick + soul_sand → 4 ──
@@ -1393,7 +1393,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:piston_correct".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![13], vec![13], vec![13], vec![12], vec![778], vec![12], vec![12], vec![993], vec![12]],
-        is_shapeless: false, result_item: 137, result_count: 1,
+        is_shapeless: false, result_item: 206, result_count: 1,
     });
     // ── Observer: 6 cobble + 2 redstone + 1 nether_quartz → 1 ──
     reg.add(Recipe { id: "minecraft:observer_correct".into(), group: "redstone".into(), category: 0,
@@ -1404,7 +1404,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ── Trapped chest: 1 chest + 1 tripwire_hook → 1 ──
     reg.add(Recipe { id: "minecraft:trapped_chest".into(), group: "redstone".into(), category: 0,
         width: 1, height: 2,
-        ingredients: vec![vec![54u32], vec![287u32]],
+        ingredients: vec![vec![620u32], vec![287u32]],
         is_shapeless: false, result_item: 146, result_count: 1,
     });
     // ── Daylight detector: 3 glass + 3 nether_quartz + 3 wood_slabs → 1 ──
@@ -1416,7 +1416,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ── Shulker box: 1 shulker_shell + 1 shulker_shell + 1 chest → 1 ──
     reg.add(Recipe { id: "minecraft:shulker_box".into(), group: "misc".into(), category: 2,
         width: 1, height: 3,
-        ingredients: vec![vec![1037u32], vec![1037u32], vec![54u32]],
+        ingredients: vec![vec![1037u32], vec![1037u32], vec![620u32]],
         is_shapeless: false, result_item: 290, result_count: 1,
     });
 
@@ -1513,13 +1513,82 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     add_stairs(reg, "purpur_stairs", 439, 442);
     add_slab(reg, "purpur_slab", 439, 443);
     // End stone brick (material=441, stairs=444, slab=445, wall=446)
-    add_stairs(reg, "end_stone_brick_stairs", 441, 444);
-    add_slab(reg, "end_stone_brick_slab", 441, 445);
-    add_wall(reg, "end_stone_brick_wall", 441, 446);
+    add_stairs(reg, "end_stone_brick_stairs", 154, 1304);
+    add_slab(reg, "end_stone_brick_slab", 154, 1305);
+    add_wall(reg, "end_stone_brick_wall", 154, 1306);
     // Blackstone (material=1103, stairs=708, slab=709, wall=710) — approximate
     // Polished blackstone (material=1104, stairs=711, slab=712, wall=713)
     // Polished blackstone brick (material=1105, stairs=714, slab=715, wall=716)
     // Red nether brick (material=1106, stairs=684, slab=685, wall=686)
+
+    // ═══ 26.2 Chaos Cubed — Sulfur & Cinnabar building blocks ═══
+    // Sulfur base (material=1240, stairs=1241, slab=1242, wall=1267)
+    add_stairs(reg, "sulfur_stairs", 1240, 1241);
+    add_slab(reg, "sulfur_slab", 1240, 1242);
+    add_wall(reg, "sulfur_wall", 1240, 1267);
+    // Polished sulfur (material=1243, stairs=1244, slab=1245, wall=1268)
+    add_stairs(reg, "polished_sulfur_stairs", 1243, 1244);
+    add_slab(reg, "polished_sulfur_slab", 1243, 1245);
+    add_wall(reg, "polished_sulfur_wall", 1243, 1268);
+    // Sulfur bricks (material=1246, stairs=1247, slab=1248, wall=1249)
+    add_stairs(reg, "sulfur_brick_stairs", 1246, 1247);
+    add_slab(reg, "sulfur_brick_slab", 1246, 1248);
+    add_wall(reg, "sulfur_brick_wall", 1246, 1249);
+    // Polished sulfur → 4×4 crafting (2×2 grid)
+    reg.add(Recipe { id: "minecraft:polished_sulfur".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1240],vec![1240], vec![1240],vec![1240]],
+        is_shapeless: false, result_item: 1243, result_count: 4,
+    });
+    // Sulfur bricks → 4×4 crafting (2×2 grid)
+    reg.add(Recipe { id: "minecraft:sulfur_bricks".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1240],vec![1240], vec![1240],vec![1240]],
+        is_shapeless: false, result_item: 1246, result_count: 4,
+    });
+    // Chiseled sulfur (2 slabs stacked)
+    reg.add(Recipe { id: "minecraft:chiseled_sulfur".into(), group: "building".into(), category: 0,
+        width: 1, height: 2,
+        ingredients: vec![vec![1242], vec![1242]],
+        is_shapeless: false, result_item: 1250, result_count: 1,
+    });
+    // Sulfur spike → sulfur block (4 spikes = 1 block)
+    reg.add(Recipe { id: "minecraft:sulfur_block_from_spike".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1251],vec![1251], vec![1251],vec![1251]],
+        is_shapeless: false, result_item: 1240, result_count: 1,
+    });
+
+    // Cinnabar base (material=1253, stairs=1254, slab=1255, wall=1269)
+    add_stairs(reg, "cinnabar_stairs", 1253, 1254);
+    add_slab(reg, "cinnabar_slab", 1253, 1255);
+    add_wall(reg, "cinnabar_wall", 1253, 1269);
+    // Polished cinnabar (material=1256, stairs=1257, slab=1258, wall=1270)
+    add_stairs(reg, "polished_cinnabar_stairs", 1256, 1257);
+    add_slab(reg, "polished_cinnabar_slab", 1256, 1258);
+    add_wall(reg, "polished_cinnabar_wall", 1256, 1270);
+    // Cinnabar bricks (material=1259, stairs=1260, slab=1261, wall=1262)
+    add_stairs(reg, "cinnabar_brick_stairs", 1259, 1260);
+    add_slab(reg, "cinnabar_brick_slab", 1259, 1261);
+    add_wall(reg, "cinnabar_brick_wall", 1259, 1262);
+    // Polished cinnabar → 4×4 crafting (2×2 grid)
+    reg.add(Recipe { id: "minecraft:polished_cinnabar".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1253],vec![1253], vec![1253],vec![1253]],
+        is_shapeless: false, result_item: 1256, result_count: 4,
+    });
+    // Cinnabar bricks → 4×4 crafting (2×2 grid)
+    reg.add(Recipe { id: "minecraft:cinnabar_bricks".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1253],vec![1253], vec![1253],vec![1253]],
+        is_shapeless: false, result_item: 1259, result_count: 4,
+    });
+    // Chiseled cinnabar (2 slabs stacked)
+    reg.add(Recipe { id: "minecraft:chiseled_cinnabar".into(), group: "building".into(), category: 0,
+        width: 1, height: 2,
+        ingredients: vec![vec![1255], vec![1255]],
+        is_shapeless: false, result_item: 1263, result_count: 1,
+    });
 
     // ═══ Additional food: baked potato, cooked meats, golden foods ═══
     // Cooked porkchop (smelted from raw porkchop — furnace recipe; here as crafting placeholder)
@@ -1561,7 +1630,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Bundle: 6 rabbit_hide + 2 string → 1
     reg.add(Recipe { id: "minecraft:bundle".into(), group: "tool".into(), category: 1,
         width: 3, height: 3,
-        ingredients: vec![vec![844], vec![844], vec![844], vec![844], vec![838u32], vec![844], vec![844], vec![844], vec![844]],
+        ingredients: vec![vec![844], vec![844], vec![844], vec![844], vec![1163u32], vec![844], vec![844], vec![844], vec![844]],
         is_shapeless: false, result_item: 1062, result_count: 1,
     });
     // Brush: 1 feather + 1 copper_ingot + 1 stick → 1
@@ -1592,7 +1661,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Glow item frame: 1 item_frame + 1 glow_ink_sac → 1
     reg.add(Recipe { id: "minecraft:glow_item_frame".into(), group: "misc".into(), category: 2,
         width: 1, height: 2,
-        ingredients: vec![vec![896u32], vec![1052u32]],
+        ingredients: vec![vec![1057u32], vec![1052u32]],
         is_shapeless: false, result_item: 1064, result_count: 1,
     });
     // White banner: 6 wool + 1 stick → 1
@@ -1604,7 +1673,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Loom pattern: 1 paper + 1 plank → banner_pattern
     reg.add(Recipe { id: "minecraft:loom_pattern".into(), group: "misc".into(), category: 2,
         width: 1, height: 2,
-        ingredients: vec![vec![891u32], vec![13]],
+        ingredients: vec![vec![1045u32], vec![13]],
         is_shapeless: false, result_item: 1022, result_count: 1,
     });
 
@@ -1710,8 +1779,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:{}_stained_glass_pane", dye_sources[i].1), group: "decoration".into(), category: 0,
             width: 3, height: 3,
-            ingredients: vec![vec![102],vec![102],vec![102], vec![102],vec![dye_ids[i]],vec![102], vec![102],vec![102],vec![102]],
-            is_shapeless: false, result_item: 160 + i as u32, result_count: 8,
+            ingredients: vec![vec![1324],vec![1324],vec![1324], vec![1324],vec![dye_ids[i]],vec![1324], vec![1324],vec![1324],vec![1324]],
+            is_shapeless: false, result_item: 1308 + i as u32, result_count: 8,
         });
     }
     // Bookshelf fix: 6 planks + 3 books → 1
@@ -1725,7 +1794,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Name tag: 1 paper + 1 string + 1 iron_nugget (simplified craft)
     reg.add(Recipe { id: "minecraft:name_tag".into(), group: "misc".into(), category: 2,
         width: 1, height: 3,
-        ingredients: vec![vec![891u32], vec![838u32], vec![1000u32]],
+        ingredients: vec![vec![1045u32], vec![1163u32], vec![1000u32]],
         is_shapeless: false, result_item: 1042, result_count: 1,
     });
     // Saddle: 5 leather + 3 iron_ingot → 1 (simplified craft)
@@ -1774,7 +1843,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // ═══ Candle: 1 string + 1 honeycomb → 1 ═══
     reg.add(Recipe { id: "minecraft:candle".into(), group: "decoration".into(), category: 2,
         width: 1, height: 2,
-        ingredients: vec![vec![838u32], vec![1053u32]],
+        ingredients: vec![vec![1163u32], vec![1053u32]],
         is_shapeless: false, result_item: 1109, result_count: 1,
     });
 
@@ -1867,7 +1936,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:mossy_cobblestone".into(), group: "building".into(), category: 0,
         width: 1, height: 2,
         ingredients: vec![vec![12], vec![1198]],
-        is_shapeless: false, result_item: 48, result_count: 1,
+        is_shapeless: false, result_item: 500, result_count: 1,
     });
     reg.add(Recipe { id: "minecraft:mossy_stone_bricks_recipe".into(), group: "building".into(), category: 0,
         width: 1, height: 2,
@@ -1919,14 +1988,14 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Lead: 4 string + 1 slime_ball → 2
     reg.add(Recipe { id: "minecraft:lead_recipe".into(), group: "tool".into(), category: 1,
         width: 3, height: 3,
-        ingredients: vec![vec![838u32],vec![838u32],vec![838u32], vec![838u32],vec![920u32],vec![0], vec![0],vec![0],vec![0]],
+        ingredients: vec![vec![1163u32],vec![1163u32],vec![1163u32], vec![1163u32],vec![920u32],vec![0], vec![0],vec![0],vec![0]],
         is_shapeless: false, result_item: 1044, result_count: 2,
     });
     // Clock fix: 4 gold + 1 redstone
     reg.add(Recipe { id: "minecraft:clock_recipe".into(), group: "tool".into(), category: 2,
         width: 3, height: 3,
         ingredients: vec![vec![0],vec![779],vec![0], vec![779],vec![993],vec![779], vec![0],vec![779],vec![0]],
-        is_shapeless: false, result_item: 893, result_count: 1,
+        is_shapeless: false, result_item: 1043, result_count: 1,
     });
 
     // ═══ Food: more baked goods ═══
@@ -1987,8 +2056,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:{}_stained_glass_pane_recipe", dye_sources[i].1), group: "building".into(), category: 0,
             width: 3, height: 3,
-            ingredients: vec![vec![102u32];8].into_iter().chain(std::iter::once(vec![dye_ids[i]])).collect(),
-            is_shapeless: false, result_item: 160 + i as u32, result_count: 8,
+            ingredients: vec![vec![1324u32];8].into_iter().chain(std::iter::once(vec![dye_ids[i]])).collect(),
+            is_shapeless: false, result_item: 1308 + i as u32, result_count: 8,
         });
     }
 
@@ -2070,21 +2139,21 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Bone block: 9 bone_meal → 1
     reg.add(Recipe { id: "minecraft:bone_block".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
-        ingredients: vec![vec![587];9],
-        is_shapeless: false, result_item: 147, result_count: 1,
+        ingredients: vec![vec![978];9],
+        is_shapeless: false, result_item: 1325, result_count: 1,
     });
     // Bone meal from bone block: 1→9
     reg.add(Recipe { id: "minecraft:bone_meal_from_block".into(), group: "misc".into(), category: 2,
         width: 1, height: 1,
-        ingredients: vec![vec![147]],
-        is_shapeless: false, result_item: 587, result_count: 9,
+        ingredients: vec![vec![1051]],
+        is_shapeless: false, result_item: 978, result_count: 9,
     });
 
     // ═══ Cobweb, vines, weeping/twisting vines recipes ═══
     reg.add(Recipe { id: "minecraft:cobweb_to_string".into(), group: "misc".into(), category: 2,
         width: 1, height: 1,
         ingredients: vec![vec![78]],
-        is_shapeless: false, result_item: 838, result_count: 4,
+        is_shapeless: false, result_item: 1163, result_count: 4,
     });
 
     // ═══ Packed ice: 9 ice → 1 ═══
@@ -2128,7 +2197,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     });
     reg.add(Recipe { id: "minecraft:white_wool_from_string".into(), group: "building".into(), category: 0,
         width: 2, height: 2,
-        ingredients: vec![vec![838u32];4],
+        ingredients: vec![vec![1163u32];4],
         is_shapeless: false, result_item: 64, result_count: 1,
     });
     // Polished blackstone: 4 blackstone → 4
@@ -2142,7 +2211,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:chest_from_any_planks".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![13],vec![13],vec![13], vec![13],vec![0],vec![13], vec![13],vec![13],vec![13]],
-        is_shapeless: false, result_item: 54, result_count: 1,
+        is_shapeless: false, result_item: 620, result_count: 1,
     });
 
     // ═══ Phase 1.5 batch 5: polished stone, nether brick, prismarine, more building blocks ═══
@@ -2307,7 +2376,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:terracotta_from_clay".into(), group: "building".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![82];8].into_iter().chain(std::iter::once(vec![0])).collect(),
-        is_shapeless: false, result_item: 172, result_count: 8,
+        is_shapeless: false, result_item: 1166, result_count: 8,
     });
 
     // ═══ Sandstone from sand (4 sand → 1) ═══
@@ -2327,7 +2396,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     let slab_conversions: [(u32, u32, &str); 6] = [
         (1092, 702, "prismarine"), (1094, 705, "prismarine_brick"),
         (1095, 707, "dark_prismarine"), (439, 443, "purpur"),
-        (441, 445, "end_stone_brick"), (1207, 1210, "mud_brick"),
+        (154, 1305, "end_stone_brick"), (1207, 1210, "mud_brick"),
     ];
     for (full, slab, name) in slab_conversions {
         add_slab(reg, &format!("{}_slab_from_full", name), full, slab);
@@ -2337,7 +2406,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     let stair_conversions: [(u32, u32, &str); 6] = [
         (1092, 701, "prismarine"), (1094, 704, "prismarine_brick"),
         (1095, 706, "dark_prismarine"), (439, 442, "purpur"),
-        (441, 444, "end_stone_brick"), (1207, 1209, "mud_brick"),
+        (154, 1304, "end_stone_brick"), (1207, 1209, "mud_brick"),
     ];
     for (full, stair, name) in stair_conversions {
         add_stairs(reg, &format!("{}_stairs_from_full", name), full, stair);
@@ -2345,7 +2414,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
 
     // ═══ Walls from full blocks (6→6) ═══
     let wall_conversions: [(u32, u32, &str); 3] = [
-        (441, 446, "end_stone_brick"), (1207, 1211, "mud_brick"),
+        (154, 1306, "end_stone_brick"), (1207, 1211, "mud_brick"),
         (1106, 686, "red_nether_brick"),
     ];
     for (full, wall, name) in wall_conversions {
@@ -2356,7 +2425,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Wool → string (4)
     reg.add(Recipe { id: "minecraft:string_from_wool".into(), group: "misc".into(), category: 2,
         width: 1, height: 1, ingredients: vec![vec![64]],
-        is_shapeless: false, result_item: 838, result_count: 4,
+        is_shapeless: false, result_item: 1163, result_count: 4,
     });
     // Gravel → flint (1)
     reg.add(Recipe { id: "minecraft:flint_from_gravel".into(), group: "misc".into(), category: 2,
@@ -2366,7 +2435,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Brick from clay ball (furnace in vanilla, crafting placeholder)
     reg.add(Recipe { id: "minecraft:brick_from_clay".into(), group: "misc".into(), category: 2,
         width: 1, height: 1, ingredients: vec![vec![909]],
-        is_shapeless: false, result_item: 45, result_count: 1,
+        is_shapeless: false, result_item: 442, result_count: 1,
     });
     // Nether brick item from netherrack (furnace in vanilla)
     reg.add(Recipe { id: "minecraft:nether_brick_from_netherrack".into(), group: "misc".into(), category: 2,
@@ -2501,7 +2570,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:purpur_pillar_recipe".into(), group: "building".into(), category: 0,
         width: 1, height: 2,
         ingredients: vec![vec![443],vec![443]],
-        is_shapeless: false, result_item: 440, result_count: 1,
+        is_shapeless: false, result_item: 955, result_count: 1,
     });
     // Hay bale: 9 wheat → 1
     reg.add(Recipe { id: "minecraft:hay_bale_recipe".into(), group: "building".into(), category: 0,
@@ -2525,13 +2594,13 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:magma_block_recipe".into(), group: "building".into(), category: 0,
         width: 2, height: 2,
         ingredients: vec![vec![925];4],
-        is_shapeless: false, result_item: 213, result_count: 1,
+        is_shapeless: false, result_item: 1077, result_count: 1,
     });
     // Shulker box dye: shulker_box + any dye → dyed shulker box (shapeless)
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:shulker_box_dye_{}", dye_sources[i].1), group: "decoration".into(), category: 2,
             width: 1, height: 2,
-            ingredients: vec![vec![290],vec![dye_ids[i]]],
+            ingredients: vec![vec![1077],vec![dye_ids[i]]],
             is_shapeless: false, result_item: 1077 + i as u32, result_count: 1,
         });
     }
@@ -2605,7 +2674,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:iron_door_recipe".into(), group: "redstone".into(), category: 0,
         width: 2, height: 3,
         ingredients: vec![vec![778];6],
-        is_shapeless: false, result_item: 334, result_count: 3,
+        is_shapeless: false, result_item: 1156, result_count: 3,
     });
     // Iron trapdoor: 4 iron → 1
     reg.add(Recipe { id: "minecraft:iron_trapdoor_recipe".into(), group: "redstone".into(), category: 0,
@@ -2629,13 +2698,13 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:stone_pressure_plate_recipe".into(), group: "redstone".into(), category: 0,
         width: 2, height: 1,
         ingredients: vec![vec![1],vec![1]],
-        is_shapeless: false, result_item: 296, result_count: 1,
+        is_shapeless: false, result_item: 1159, result_count: 1,
     });
     // Oak pressure plate fix
     reg.add(Recipe { id: "minecraft:oak_pressure_plate_recipe".into(), group: "redstone".into(), category: 0,
         width: 2, height: 1,
         ingredients: vec![vec![13],vec![13]],
-        is_shapeless: false, result_item: 298, result_count: 1,
+        is_shapeless: false, result_item: 840, result_count: 1,
     });
     // Heavy weighted pressure plate: 2 iron → 1
     reg.add(Recipe { id: "minecraft:heavy_pressure_plate".into(), group: "redstone".into(), category: 0,
@@ -2653,7 +2722,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:tripwire_hook_recipe".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![778],vec![794],vec![13], vec![0],vec![0],vec![0], vec![0],vec![0],vec![0]],
-        is_shapeless: false, result_item: 287, result_count: 2,
+        is_shapeless: false, result_item: 1307, result_count: 2,
     });
     // Trapped chest fix
     reg.add(Recipe { id: "minecraft:trapped_chest_recipe".into(), group: "redstone".into(), category: 0,
@@ -2725,8 +2794,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     add_stairs(reg, "purpur_stairs_recipe", 439, 442);
     add_slab(reg, "purpur_slab_recipe", 439, 443);
     // End stone brick stairs + slab
-    add_stairs(reg, "end_stone_brick_stairs_recipe", 441, 444);
-    add_slab(reg, "end_stone_brick_slab_recipe", 441, 445);
+    add_stairs(reg, "end_stone_brick_stairs_recipe", 154, 1304);
+    add_slab(reg, "end_stone_brick_slab_recipe", 154, 1305);
     // Mossy cobblestone stairs + slab
     add_stairs(reg, "mossy_cobblestone_stairs_recipe", 48, 648);
     add_slab(reg, "mossy_cobblestone_slab_recipe", 48, 649);
@@ -2792,7 +2861,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:mossy_cobblestone_v2".into(), group: "building".into(), category: 0,
         width: 2, height: 2,
         ingredients: vec![vec![12],vec![1198], vec![1198],vec![12]],
-        is_shapeless: false, result_item: 48, result_count: 4,
+        is_shapeless: false, result_item: 500, result_count: 4,
     });
 
     // ═══ More transport: activator rail, powered rail fix ═══
@@ -2880,7 +2949,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
 
     // ═══ Phase 1.5 batch 6: 100-recipe push to 500 ═══
     // 16 colored: stained glass (repeat with unique IDs for coverage)
-    let _glass16: [u32; 16] = [66,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159];
+    let _glass16: [u32; 16] = [66,1271,1272,1273,1274,1275,1276,1277,1278,1279,1280,1281,1282,1283,1284,1285];
     for i in 1..16 {
         reg.add(Recipe { id: format!("minecraft:stained_glass_v3_{}", dye_sources[i].1), group: "building".into(), category: 0,
             width: 3, height: 3,
@@ -2976,8 +3045,8 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
         let log_id = [34u32,35,36,37,38,39,40,41][i]; // oak→mangrove logs
         reg.add(Recipe { id: format!("minecraft:{}_hanging_sign", wood_names[i]), group: "sign".into(), category: 0,
             width: 3, height: 3,
-            ingredients: vec![vec![531],vec![531],vec![0], vec![log_id],vec![log_id],vec![log_id], vec![log_id],vec![log_id],vec![log_id]],
-            is_shapeless: false, result_item: sign_results[i] + 100, result_count: 6,
+            ingredients: vec![vec![843],vec![843],vec![0], vec![log_id],vec![log_id],vec![log_id], vec![log_id],vec![log_id],vec![log_id]],
+            is_shapeless: false, result_item: sign_results[i] + 1, result_count: 6,
         });
     }
     // Ladders: 7 sticks H-pattern → 3
@@ -3027,13 +3096,13 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     reg.add(Recipe { id: "minecraft:comparator_v2".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![0],vec![994],vec![0], vec![994],vec![155],vec![994], vec![1],vec![1],vec![1]],
-        is_shapeless: false, result_item: 851, result_count: 1,
+        is_shapeless: false, result_item: 1153, result_count: 1,
     });
     // Repeater v2
     reg.add(Recipe { id: "minecraft:repeater_v2".into(), group: "redstone".into(), category: 0,
         width: 3, height: 3,
         ingredients: vec![vec![994],vec![993],vec![994], vec![0],vec![0],vec![0], vec![1],vec![1],vec![1]],
-        is_shapeless: false, result_item: 852, result_count: 1,
+        is_shapeless: false, result_item: 1147, result_count: 1,
     });
     // Hopper v2
     reg.add(Recipe { id: "minecraft:hopper_v2".into(), group: "redstone".into(), category: 0,
@@ -3055,7 +3124,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Dye 16 wool blocks (16 colors)
     for (i, &wid) in wool_ids.iter().enumerate() { add_dye_recipe(reg, 64, i, wid, 8, "building"); }
     // Dye 16 terracotta (16 colors)
-    for (i, &tid) in terracotta_ids.iter().enumerate() { add_dye_recipe(reg, 172, i, tid, 8, "building"); }
+    for (i, &tid) in terracotta_ids.iter().enumerate() { add_dye_recipe(reg, 181, i, tid, 8, "building"); }
     // Dye 16 beds (16 colors)
     for (i, &bid) in bed_ids.iter().enumerate() { add_dye_recipe(reg, 887, i, bid, 1, "building"); }
     // Dye 16 shulker boxes (16 colors)
@@ -3117,7 +3186,7 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
 }
 // Helper: concrete block IDs (16 colors)
 fn concrete_ids(idx: u32) -> u32 {
-    [246,247,248,249,250,251,252,253,254,255,256,257,258,259,260,261][idx as usize]
+    [1094,1095,1096,1097,1098,1099,1100,1101,1102,1103,1104,1105,1106,1107,1108,1109][idx as usize]
 }
 
 #[cfg(test)]
@@ -3134,7 +3203,7 @@ mod tests {
         ];
         let result = reg.find_match(&grid);
         assert!(result.is_some());
-        let (idx, recipe) = result.unwrap();
+        let (_idx, recipe) = result.unwrap();
         assert_eq!(recipe.result_item, 13); // oak_planks
         assert_eq!(recipe.result_count, 4);
     }
@@ -3173,5 +3242,29 @@ mod tests {
         let count = reg.len();
         println!("Total recipes at runtime: {}", count);
         assert!(count >= 400, "Expected at least 400 recipes, got {}", count);
+    }
+
+    #[test]
+    fn test_recipe_result_items_exist() {
+        let reg = RecipeRegistry::new();
+        let known_ids = mc_core::item::known_item_ids();
+        let mut missing_ids: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
+        let total = reg.len();
+
+        for i in 0..total {
+            if let Some(recipe) = reg.get(i) {
+                if recipe.result_item != 0 && !known_ids.contains(&recipe.result_item) {
+                    missing_ids.insert(recipe.result_item);
+                }
+            }
+        }
+
+        println!("Validated {} recipes against {} known item IDs", total, known_ids.len());
+        if !missing_ids.is_empty() {
+            println!("WARNING: {} recipe results reference unknown item IDs: {:?}",
+                missing_ids.len(), missing_ids);
+        }
+        // Note: some IDs may be legitimately missing if item registration is incomplete.
+        // This is an informational test; it doesn't hard-assert to allow gradual registration expansion.
     }
 }

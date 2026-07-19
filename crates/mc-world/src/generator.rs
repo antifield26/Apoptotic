@@ -335,6 +335,12 @@ pub fn sample_biome_at_y(wx: i32, wz: i32, y: i32, seed: u64) -> mc_core::biome:
     if y < 0 && y > -30 && humidity_3d < 0.3 && cave_noise > 0.5 {
         return BiomeId::DripstoneCaves;
     }
+    // 26.2 SulfurCaves: mid-deep (-10 to -45), hot/dry signature, sulfur bands
+    // Requires cave_noise in specific range (weirdness-like) and dry conditions
+    let temperature_3d = ((cave_hash >> 24) as u32 % 100) as f32 / 100.0;
+    if y < -10 && y > -45 && temperature_3d > 0.65 && humidity_3d < 0.6 && cave_noise > 0.4 && cave_noise < 0.85 {
+        return BiomeId::SulfurCaves;
+    }
 
     surface
 }

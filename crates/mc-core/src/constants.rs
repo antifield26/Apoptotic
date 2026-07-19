@@ -90,7 +90,7 @@ pub mod entity_type {
     pub const FURNACE_MINECART: i32 = 41;
     pub const HOPPER_MINECART: i32 = 42;
     pub const TNT_MINECART: i32 = 107;
-    pub const BOAT: i32 = 41; // boat entity type (moved from 23 — collision with COD)
+    pub const BOAT: i32 = 132; // boat entity type (custom ID — avoids collisions with COD=23 and FURNACE_MINECART=41)
     // Projectiles/Items
     pub const ARROW_ENTITY: i32 = 7;
     pub const ITEM_ENTITY: i32 = 54;

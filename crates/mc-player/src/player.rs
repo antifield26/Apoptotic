@@ -135,6 +135,12 @@ pub struct Player {
     pub is_sneaking: bool,
     /// 盾牌格挡状态
     pub is_blocking: bool,
+    /// 速度倍率 (Speed/Slowness 效果, 默认 1.0)
+    pub speed_multiplier: f32,
+    /// 挖掘速度倍率 (MiningFatigue 效果, 默认 1.0)
+    pub mining_multiplier: f32,
+    /// 跳跃倍率 (JumpBoost 效果, 默认 1.0)
+    pub jump_multiplier: f32,
     /// 经验条进度 (0.0-1.0)
     pub xp_bar: f32,
     /// 经验等级
@@ -229,6 +235,9 @@ impl PlayerManager {
             is_sprinting: false,
             is_sneaking: false,
             is_blocking: false,
+            speed_multiplier: 1.0,
+            mining_multiplier: 1.0,
+            jump_multiplier: 1.0,
             xp_bar: 0.0,
             xp_level: 0,
             xp_total: 0,
@@ -1089,7 +1098,34 @@ impl PlayerManager {
                 player.food_level = (player.food_level + saturation_level as i32).min(20);
             }
 
-            // Speed (1): movement speed multiplier — applied in position handler
+            // Speed (1): +20% movement speed per amplifier level
+            let speed_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 1)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            let slowness_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 2)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            player.speed_multiplier = 1.0 + 0.2 * speed_lvl as f32 - 0.15 * slowness_lvl as f32;
+            if player.speed_multiplier < 0.1 { player.speed_multiplier = 0.1; }
+
+            // MiningFatigue (4): -30% mining speed per amplifier level
+            let fatigue_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 4)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            player.mining_multiplier = (1.0 - 0.3 * fatigue_lvl as f32).max(0.05);
+
+            // Haste (3): +20% mining speed per amplifier level
+            let haste_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 3)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            player.mining_multiplier = (player.mining_multiplier + 0.2 * haste_lvl as f32).min(5.0);
+
+            // JumpBoost (8): +0.5 blocks jump height per level
+            let jump_lvl = player.active_effects.iter()
+                .find(|e| e.effect.id() == 8)
+                .map(|e| e.amplifier + 1).unwrap_or(0);
+            player.jump_multiplier = 1.0 + 0.5 * jump_lvl as f32;
+
             // Haste (3): mining speed multiplier — applied in PlayerAction handler
             // SlowFalling (28): reduces fall damage — checked in add_fall_distance
 

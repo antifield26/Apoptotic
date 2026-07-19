@@ -3,7 +3,7 @@
 //! ## 架构
 //!
 //! WASM 插件通过标准化的导出函数接口与服务器交互。
-//! 启用方式: 在 Cargo.toml 中取消注释 `extism = "1"` 依赖并重新编译。
+//! 启用方式: `cargo build --features wasm-runtime` (需要 extism 依赖)
 //!
 //! ## WASM 插件导出函数 (PDK)
 //!
@@ -27,12 +27,12 @@
 
 use super::plugin::NativePlugin;
 use super::plugin::PluginContext;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 /// WASM plugin adapter — wraps a WASM plugin and implements NativePlugin.
 ///
-/// When extism is enabled, this calls into the WASM module via extism::Plugin.
-/// When extism is disabled (default), this provides a stub that logs discovery.
+/// When extism is enabled (`wasm-runtime` feature), this calls into the WASM
+/// module via extism::Plugin. When disabled, it provides a stub that logs discovery.
 pub struct WasmPlugin {
     name: String,
     version: String,
@@ -42,6 +42,9 @@ pub struct WasmPlugin {
     enabled: bool,
     /// Whether the WASM runtime is available (extism compiled in)
     runtime_available: bool,
+    /// The extism plugin handle (only when wasm-runtime feature is enabled)
+    #[cfg(feature = "wasm-runtime")]
+    extism_plugin: Option<extism::Plugin>,
 }
 
 impl WasmPlugin {
@@ -78,6 +81,8 @@ impl WasmPlugin {
             path: path.to_path_buf(),
             enabled: false,
             runtime_available: runtime,
+            #[cfg(feature = "wasm-runtime")]
+            extism_plugin: None,
         })
     }
 
@@ -85,6 +90,37 @@ impl WasmPlugin {
     pub fn wasm_path(&self) -> &std::path::Path {
         &self.path
     }
+
+    /// Initialize the extism plugin from the WASM file.
+    /// Called during on_enable when wasm-runtime feature is active.
+    #[cfg(feature = "wasm-runtime")]
+    fn init_extism(&mut self) -> Result<(), String> {
+        let wasm_bytes = std::fs::read(&self.path)
+            .map_err(|e| format!("Failed to read WASM: {}", e))?;
+        let manifest = extism::Manifest::new(
+            [extism::Wasm::data(wasm_bytes)]
+        );
+        let plugin = extism::Plugin::new(&manifest, [], true)
+            .map_err(|e| format!("Failed to init extism plugin: {}", e))?;
+        self.extism_plugin = Some(plugin);
+        info!("WASM runtime initialized for plugin '{}'", self.name);
+        Ok(())
+    }
+
+    /// Call a WASM function if the runtime is available, otherwise no-op.
+    #[cfg(feature = "wasm-runtime")]
+    fn call_wasm(&mut self, func: &str, input: &str) {
+        if let Some(ref mut plugin) = self.extism_plugin {
+            match plugin.call::<&str, &str>(func, input) {
+                Ok(output) => info!("WASM plugin '{}' -> {}({}): {}", self.name, func, input, output),
+                Err(e) => error!("WASM plugin '{}' call {} failed: {}", self.name, func, e),
+            }
+        }
+    }
+
+    /// No-op stub for when wasm-runtime is not enabled.
+    #[cfg(not(feature = "wasm-runtime"))]
+    fn call_wasm(&mut self, _func: &str, _input: &str) {}
 }
 
 impl NativePlugin for WasmPlugin {
@@ -92,31 +128,45 @@ impl NativePlugin for WasmPlugin {
     fn version(&self) -> &str { &self.version }
 
     fn on_enable(&mut self, _ctx: &PluginContext) {
-        if !self.runtime_available {
-            warn!(
+        #[cfg(feature = "wasm-runtime")]
+        {
+            if self.runtime_available {
+                if let Err(e) = self.init_extism() {
+                    error!("Failed to init WASM plugin '{}': {}", self.name, e);
+                    self.enabled = false;
+                    return;
+                }
+                self.call_wasm("on_enable", "");
+            }
+        }
+        #[cfg(not(feature = "wasm-runtime"))]
+        {
+            tracing::warn!(
                 "WASM plugin '{}' discovered but runtime not compiled in. \
-                 Uncomment `extism = \"1\"` in mc-plugin/Cargo.toml and rebuild to enable.",
+                 Build with `--features wasm-runtime` to enable.",
                 self.name
             );
         }
         self.enabled = true;
         info!("WASM plugin '{}' enabled{}", self.name,
-            if self.runtime_available { "" } else { " (runtime pending)" });
+            if self.runtime_available { " (runtime active)" } else { " (stub mode)" });
     }
 
-    fn on_tick(&mut self, _ctx: &PluginContext, _tick: u64) {
-        // stub — WASM runtime handles this when extism is enabled
+    fn on_tick(&mut self, _ctx: &PluginContext, tick: u64) {
+        self.call_wasm("on_tick", &tick.to_string());
     }
 
-    fn on_player_join(&mut self, _ctx: &PluginContext, _uuid: &uuid::Uuid, _username: &str) {
-        // stub
+    fn on_player_join(&mut self, _ctx: &PluginContext, uuid: &uuid::Uuid, username: &str) {
+        let input = format!("{}|{}", uuid, username);
+        self.call_wasm("on_player_join", &input);
     }
 
-    fn on_player_leave(&mut self, _ctx: &PluginContext, _uuid: &uuid::Uuid) {
-        // stub
+    fn on_player_leave(&mut self, _ctx: &PluginContext, uuid: &uuid::Uuid) {
+        self.call_wasm("on_player_leave", &uuid.to_string());
     }
 
     fn on_disable(&mut self) {
+        self.call_wasm("on_disable", "");
         self.enabled = false;
         info!("WASM plugin '{}' disabled", self.name);
     }

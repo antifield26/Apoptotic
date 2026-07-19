@@ -403,6 +403,8 @@ fn biome_list() -> BiomeList {
             // 1.19-1.21 biomes
             BiomeEntry { name: "minecraft:cherry_grove".into(), id: 59, element: plain_style_biome(0.5, 0.6, 0xF2C4E0) },
             BiomeEntry { name: "minecraft:pale_garden".into(), id: 60, element: plain_style_biome(0.5, 0.5, 0xBFBFBF) },
+            // 26.2 Chaos Cubed — Sulfur Caves (hot, dry, yellow fog glow)
+            BiomeEntry { name: "minecraft:sulfur_caves".into(), id: 61, element: sulfur_caves_biome() },
         ],
     }
 }
@@ -435,6 +437,35 @@ fn plains_biome() -> BiomeElement {
                 offset: 2.0,
                 block_search_extent: 8,
             }),
+            particle: None,
+        },
+    }
+}
+
+/// 26.2 Sulfur Caves — hot, dry underground biome with yellow sulfurous glow
+fn sulfur_caves_biome() -> BiomeElement {
+    BiomeElement {
+        has_precipitation: 1,
+        temperature: 1.0,
+        temperature_modifier: None,
+        downfall: 0.2,
+        effects: BiomeEffects {
+            fog_color: 0x3A3518,        // dark yellow-green fog
+            water_color: 0x8B8C3A,     // sulfur-tinged yellow water
+            water_fog_color: 0x3A3218, // dark yellow water fog
+            sky_color: 0x2D2310,       // dark cave sky
+            foliage_color: None,
+            grass_color: None,
+            grass_color_modifier: None,
+            music: Some(MusicEffect {
+                sound: "minecraft:music.overworld.sulfur_caves".into(),
+                min_delay: 12000,
+                max_delay: 24000,
+                replace_current_music: 0,
+            }),
+            ambient_sound: None,
+            additions_sound: None,
+            mood_sound: None,
             particle: None,
         },
     }

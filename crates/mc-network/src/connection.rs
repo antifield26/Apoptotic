@@ -812,6 +812,19 @@ async fn handle_play(
     let chunk_count = spawn_chunks.len();
     info!("Generated {} spawn chunks using '{}'", chunk_count, server.generator.name());
 
+    // Max players hard cap — reject if server is full
+    {
+        let online = server.player_manager.online_count() as u32;
+        if online >= server.max_players {
+            let disconnect = LoginDisconnect {
+                reason: format!("{{\"text\":\"Server is full ({} / {})\",\"color\":\"red\"}}", online, server.max_players),
+            };
+            let _ = send_packet(io, &disconnect).await;
+            warn!("Rejected '{}': server full ({} / {})", username, online, server.max_players);
+            return;
+        }
+    }
+
     // 注册玩家到 PlayerManager
     let player = server.player_manager.add_player(_uuid, username.to_string());
     server.plugin_manager.notify_player_join(&server.plugin_ctx, &_uuid, username);
@@ -1803,6 +1816,12 @@ async fn play_loop(
                 continue;
             }
         };
+
+        // Packet size limit: reject frames larger than 2MB (anti-DoS)
+        if frame.len() > 2_097_152 {
+            warn!("Oversized packet ({} bytes) from {}, disconnecting", frame.len(), username);
+            return;
+        }
 
         let (packet_id, _payload) = match io.codec().parse_packet_id_and_payload(&frame) {
             Ok(v) => v,
@@ -4246,7 +4265,7 @@ async fn play_loop(
                 }
             }
             _ => {
-                debug!("Unknown Play packet 0x{:02X} from {}", packet_id, username);
+                warn!("Unknown Play packet 0x{:02X} from {}", packet_id, username);
             }
         }
     }

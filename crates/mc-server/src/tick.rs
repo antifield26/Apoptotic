@@ -310,7 +310,7 @@ fn pick_hostile_mob(biome: mc_core::biome::BiomeId) -> i32 {
         // Cave-specific: underground biomes → cave spider / silverfish
         18 => if matches!(biome,
             mc_core::biome::BiomeId::DripstoneCaves | mc_core::biome::BiomeId::LushCaves |
-            mc_core::biome::BiomeId::DeepDark
+            mc_core::biome::BiomeId::DeepDark | mc_core::biome::BiomeId::SulfurCaves
         ) { CAVE_SPIDER } else { SILVERFISH },
         // DeepDark → Warden (rare spawn)
         19 => if biome == mc_core::biome::BiomeId::DeepDark { WARDEN } else { ZOMBIE },
@@ -370,7 +370,7 @@ pub fn tick_passive_spawning(
             // All valid passive/ambient mob types for surface spawning
             let surface_passive = [COW, PIG, CHICKEN, SHEEP, RABBIT, FOX, TURTLE, POLAR_BEAR, PANDA, ARMADILLO];
             let water_passive = [SQUID, DOLPHIN, COD, SALMON, PUFFERFISH, TROPICAL_FISH, GLOW_SQUID];
-            let cave_passive = [BAT];
+            let cave_passive = [BAT, SULFUR_CUBE]; // 26.2: Sulfur Caves adds SulfurCube
             let _nether_passive: [i32; 0] = []; // striders etc. — not yet implemented
             // Pick based on biome context and spawn position
             let biome = mc_world::generator::sample_biome(sx as i32, sz as i32, {
@@ -385,7 +385,12 @@ pub fn tick_passive_spawning(
                 if is_water {
                     water_passive[fastrand::usize(0..water_passive.len())]
                 } else if is_cave {
-                    cave_passive[fastrand::usize(0..cave_passive.len())]
+                    // In SulfurCaves, bias toward SulfurCube over Bat (2:1 ratio via fastrand)
+                    if biome == mc_core::biome::BiomeId::SulfurCaves && !fastrand::u32(..).is_multiple_of(3) {
+                        SULFUR_CUBE
+                    } else {
+                        cave_passive[fastrand::usize(0..cave_passive.len())]
+                    }
                 } else if biome == mc_core::biome::BiomeId::MushroomFields {
                     MOOSHROOM // exclusive to mushroom fields
                 } else {

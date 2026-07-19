@@ -1,8 +1,8 @@
-//! 生物群系类型 — 48 种群系 + 温度/湿度噪声采样
+//! 生物群系类型 — 54 种群系 + 温度/湿度噪声采样
 
 use crate::block::BlockState;
 
-/// 生物群系 ID (48 total in this implementation)
+/// 生物群系 ID (54 total in this implementation)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BiomeId {
     // Overworld — temperate (0-19)
@@ -24,6 +24,8 @@ pub enum BiomeId {
     JaggedPeaks = 46, FrozenPeaks = 47, StonyPeaks = 48,
     // Caves
     DripstoneCaves = 49, LushCaves = 50, DeepDark = 51,
+    // 26.2 Chaos Cubed
+    SulfurCaves = 54,
     // Cherry
     CherryGrove = 52, PaleGarden = 53,
     // Nether (60-64)
@@ -61,6 +63,7 @@ impl BiomeId {
             48 => Some(Self::StonyPeaks), 49 => Some(Self::DripstoneCaves),
             50 => Some(Self::LushCaves), 51 => Some(Self::DeepDark),
             52 => Some(Self::CherryGrove), 53 => Some(Self::PaleGarden),
+            54 => Some(Self::SulfurCaves),
             60 => Some(Self::NetherWastes), 61 => Some(Self::SoulSandValley),
             62 => Some(Self::CrimsonForest), 63 => Some(Self::WarpedForest),
             64 => Some(Self::BasaltDeltas),
@@ -112,6 +115,8 @@ impl BiomeId {
             Self::DripstoneCaves => (BlockState::new(1), BlockState::new(1), BlockState::new(1)),
             Self::LushCaves => (BlockState::new(9), BlockState::new(1), BlockState::new(1)),
             Self::DeepDark => (BlockState::new(1), BlockState::new(269), BlockState::new(1)),
+            // 26.2 Sulfur Caves — sulfur surface, stone mid, deepslate deep with cinnabar veins
+            Self::SulfurCaves => (BlockState::new(1240), BlockState::new(1), BlockState::new(269)),
             // Nether
             Self::NetherWastes | Self::CrimsonForest | Self::WarpedForest =>
                 (BlockState::new(87), BlockState::new(87), BlockState::new(87)),
