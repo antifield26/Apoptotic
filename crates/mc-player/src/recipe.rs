@@ -1590,6 +1590,30 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
         is_shapeless: false, result_item: 1263, result_count: 1,
     });
 
+    // ═══ Deepslate building blocks (cobbled_deepslate=1341) ═══
+    add_stairs(reg, "cobbled_deepslate_stairs", 1341, 1342);
+    add_slab(reg, "cobbled_deepslate_slab", 1341, 1343);
+    add_wall(reg, "cobbled_deepslate_wall", 1341, 1344);
+    // Polished deepslate (1345)
+    add_stairs(reg, "polished_deepslate_stairs", 1345, 1346);
+    add_slab(reg, "polished_deepslate_slab", 1345, 1347);
+    add_wall(reg, "polished_deepslate_wall", 1345, 1348);
+    // Deepslate bricks (1349)
+    add_stairs(reg, "deepslate_brick_stairs", 1349, 1350);
+    add_slab(reg, "deepslate_brick_slab", 1349, 1351);
+    add_wall(reg, "deepslate_brick_wall", 1349, 1352);
+    // Deepslate tiles (1353)
+    add_stairs(reg, "deepslate_tile_stairs", 1353, 1354);
+    add_slab(reg, "deepslate_tile_slab", 1353, 1355);
+    add_wall(reg, "deepslate_tile_wall", 1353, 1356);
+    // Red nether brick (1329)
+    add_stairs(reg, "red_nether_brick_stairs", 1329, 1330);
+    add_slab(reg, "red_nether_brick_slab", 1329, 1331);
+    add_wall(reg, "red_nether_brick_wall", 1329, 1332);
+    // Purpur (1327, 1328)
+    add_stairs(reg, "purpur_stairs", 439, 1327);
+    add_slab(reg, "purpur_slab", 439, 1328);
+
     // ═══ Additional food: baked potato, cooked meats, golden foods ═══
     // Cooked porkchop (smelted from raw porkchop — furnace recipe; here as crafting placeholder)
     // Golden carrot (already exists at ~770)

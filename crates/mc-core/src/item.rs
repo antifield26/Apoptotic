@@ -1099,6 +1099,39 @@ m.insert("cinnabar_brick_wall", 1262);
     }
     m.insert("glass_pane", 1324);
     m.insert("bone_block", 1325);
+    // ═══ Missing vanilla blocks — batch addition ═══
+    m.insert("purpur_pillar", 1326);
+    m.insert("purpur_stairs", 1327);
+    m.insert("purpur_slab", 1328);
+    m.insert("red_nether_bricks", 1329);
+    m.insert("red_nether_brick_stairs", 1330);
+    m.insert("red_nether_brick_slab", 1331);
+    m.insert("red_nether_brick_wall", 1332);
+    m.insert("quartz_pillar", 1333);
+    m.insert("chiseled_quartz", 1334);
+    m.insert("smooth_quartz", 1335);
+    m.insert("smooth_quartz_stairs", 1336);
+    m.insert("smooth_quartz_slab", 1337);
+    m.insert("smooth_stone_slab", 1338);
+    m.insert("cracked_nether_bricks", 1339);
+    m.insert("chiseled_nether_bricks", 1340);
+    // Deepslate variants
+    m.insert("cobbled_deepslate", 1341);
+    m.insert("cobbled_deepslate_stairs", 1342);
+    m.insert("cobbled_deepslate_slab", 1343);
+    m.insert("cobbled_deepslate_wall", 1344);
+    m.insert("polished_deepslate", 1345);
+    m.insert("polished_deepslate_stairs", 1346);
+    m.insert("polished_deepslate_slab", 1347);
+    m.insert("polished_deepslate_wall", 1348);
+    m.insert("deepslate_bricks", 1349);
+    m.insert("deepslate_brick_stairs", 1350);
+    m.insert("deepslate_brick_slab", 1351);
+    m.insert("deepslate_brick_wall", 1352);
+    m.insert("deepslate_tiles", 1353);
+    m.insert("deepslate_tile_stairs", 1354);
+    m.insert("deepslate_tile_slab", 1355);
+    m.insert("deepslate_tile_wall", 1356);
 
     m
 });

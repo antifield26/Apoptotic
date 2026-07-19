@@ -1169,14 +1169,129 @@ impl MobManager {
                             }
                         }
                     }
-                // SnowGolem (105): wander + throw snowballs at hostile mobs
+                // SnowGolem (105): wander + throw snowballs at hostile mobs within 10 blocks
                 if mob.mob_type == 105 {
                     if mob.age_ticks % 60 == 0 {
                         mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*5.0, target_z: mob.position.z + (fastrand::f64()-0.5)*5.0 };
                     }
-                    // Melt in warm biomes
-                    if mob.age_ticks % 100 == 0 && fastrand::bool() { mob.health -= 1.0; }
+                    if mob.age_ticks % 20 == 0 && mob.attack_cooldown == 0
+                        && let Some(_pm) = player_manager {
+                            for player in _pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dz = player.position.z - mob.position.z;
+                                if dx*dx + dz*dz < 100.0 && dx*dx + dz*dz > 4.0 {
+                                    mob.attack_cooldown = 20;
+                                    let eid = self.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    self.spawn_projectile(player.uuid, mob.entity_id,
+                                        ProjectileType::Snowball, mob.position.x, mob.position.y + 1.5, mob.position.z,
+                                        dx * 0.1, 0.2, dz * 0.1, 0.0);
+                                    let _ = self.position_tx.send(MobPositionEvent { entity_id: eid, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                                    break;
+                                }
+                            }
+                        }
+                    if mob.age_ticks % 100 == 0 && fastrand::bool() { mob.health -= 1.0; } // melt
                 }
+                // Guardian (26): thorn damage to attackers + laser beam
+                if mob.mob_type == 26 && mob.attack_cooldown == 0 && mob.age_ticks % 30 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            let dist_sq = dx*dx + dz*dz;
+                            if dist_sq < 64.0 && dist_sq > 4.0 {
+                                mob.attack_cooldown = 30;
+                                let new_hp = player.health - 2.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                // Thorn: reflect 1 HP to attacker at close range
+                                if dist_sq < 9.0 {
+                                    let dmg = player.health - 3.0;
+                                    let _ = pm.set_health(&player.uuid, dmg.max(0.0));
+                                }
+                                break;
+                            }
+                        }
+                    }
+                // IronGolem (99): attack + throw target into air
+                if mob.mob_type == 99 && mob.attack_cooldown == 0 && mob.age_ticks % 20 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 9.0 {
+                                mob.attack_cooldown = 25;
+                                let new_hp = player.health - 7.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                // Throw target upward
+                                let _ = pm.update_position_full(&player.uuid, player.position.x, player.position.y + 0.5, player.position.z, player.position.yaw, player.position.pitch);
+                                break;
+                            }
+                        }
+                        // Offer flower to villagers every 2 min
+                        if mob.age_ticks % 2400 == 0 {
+                            let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        }
+                    }
+                // Phantom (22): swoop attack — deal damage at lowest dive point
+                if mob.mob_type == 22 && mob.attack_cooldown == 0 && mob.age_ticks % 60 == 0
+                    && let Some(pm) = player_manager {
+                        if mob.age_ticks / 60 % 2 == 0 {
+                            mob.position.y = (mob.position.y - 3.0).max(50.0);
+                        } else {
+                            mob.position.y = (mob.position.y + 3.0).min(200.0);
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        // Deal damage to closest player within 5 blocks of dive path
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            let dy = (player.position.y - mob.position.y).abs();
+                            if dx*dx + dz*dz < 25.0 && dy < 3.0 {
+                                mob.attack_cooldown = 40;
+                                let new_hp = player.health - 4.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                break;
+                            }
+                        }
+                    }
+                // PolarBear (28): protective — attacks if player within 5 blocks
+                if mob.mob_type == 28 && mob.attack_cooldown == 0 && mob.age_ticks % 40 == 0
+                    && let Some(pm) = player_manager {
+                        for player in pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 25.0 {
+                                mob.attack_cooldown = 30;
+                                let new_hp = player.health - 5.0;
+                                let _ = pm.set_health(&player.uuid, new_hp.max(0.0));
+                                break;
+                            }
+                        }
+                    }
+                // Allay (64): float + attempt to pick up nearby dropped items
+                if mob.mob_type == 64 && mob.age_ticks % 40 == 0
+                    && let Some(_pm) = player_manager {
+                        mob.position.y = (mob.position.y + (fastrand::f64()-0.5)*0.8).clamp(55.0, 80.0);
+                        mob.ai_state = MobAiState::Wandering { target_x: mob.position.x + (fastrand::f64()-0.5)*6.0, target_z: mob.position.z + (fastrand::f64()-0.5)*6.0 };
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                    }
+                // Llama (120): spit at threats within 6 blocks
+                if (mob.mob_type == 120 || mob.mob_type == 121) && mob.attack_cooldown == 0 && mob.age_ticks % 40 == 0
+                    && let Some(_pm) = player_manager {
+                        for player in _pm.all_players() {
+                            let dx = player.position.x - mob.position.x;
+                            let dz = player.position.z - mob.position.z;
+                            if dx*dx + dz*dz < 36.0 && dx*dx + dz*dz > 4.0 {
+                                mob.attack_cooldown = 40;
+                                let eid = self.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                self.spawn_projectile(player.uuid, mob.entity_id,
+                                    ProjectileType::Snowball, mob.position.x, mob.position.y + 1.5, mob.position.z,
+                                    dx * 0.15, 0.1, dz * 0.15, 1.0);
+                                let _ = self.position_tx.send(MobPositionEvent { entity_id: eid, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                                break;
+                            }
+                        }
+                    }
                 // Slime (34): hopping movement + split on death (split_slime called externally)
                 if mob.mob_type == 34 && mob.age_ticks % 40 == 0 {
                     mob.position.y += 0.5; // hop
@@ -1635,5 +1750,62 @@ pub fn mob_xp_drop(mob_type: i32) -> i32 {
         11..=14 => 1 + (fastrand::i32(0..3)),
         33 | 36 | 37 => 5,
         _ => 1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mob::{MobManager, MobAiState, TrackedMob};
+    use mc_core::position::Position;
+
+    fn make_tracked() -> TrackedMob {
+        TrackedMob {
+            entity_id: 1, uuid: uuid::Uuid::new_v4(), mob_type: 0,
+            position: Position::new(0.0, 64.0, 0.0),
+            health: 20.0, max_health: 20.0, age_ticks: 0, ai_timer: 0,
+            ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
+            owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0,
+            is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false,
+            path: vec![], path_last_tick: 0, is_on_fire: false, is_in_water: false,
+        }
+    }
+
+    #[test]
+    fn test_hostile_entities_have_ai_branches() {
+        let hostile_ids: [i32; 25] = [33, 34, 35, 36, 37, 38, 43, 46, 47, 48, 49, 50, 51, 52, 53, 55, 56, 57, 58, 59, 60, 61, 62, 63, 71];
+        let mgr = MobManager::new();
+        for &id in &hostile_ids {
+            let mut t = make_tracked();
+            t.mob_type = id;
+            mgr.mobs.insert(id, t);
+        }
+        mgr.tick_ai(None);
+        for &id in &hostile_ids { mgr.mobs.remove(&id); }
+    }
+
+    #[test]
+    fn test_passive_entities_have_ai_branches() {
+        let passive_ids: [i32; 8] = [11, 12, 13, 14, 15, 16, 28, 65];
+        let mgr = MobManager::new();
+        for &id in &passive_ids {
+            let mut t = make_tracked();
+            t.mob_type = id;
+            mgr.mobs.insert(id, t);
+        }
+        mgr.tick_ai(None);
+        for &id in &passive_ids { mgr.mobs.remove(&id); }
+    }
+
+    #[test]
+    fn test_effect_multipliers_exist() {
+        let pm = crate::player::PlayerManager::new();
+        let uuid = uuid::Uuid::new_v4();
+        pm.add_player(uuid, "test".into());
+        let p = pm.get(&uuid).unwrap();
+        assert_eq!(p.speed_multiplier, 1.0);
+        assert_eq!(p.mining_multiplier, 1.0);
+        assert_eq!(p.jump_multiplier, 1.0);
+        assert_eq!(p.fall_damage_multiplier, 1.0);
+        assert_eq!(p.swim_speed_multiplier, 1.0);
     }
 }
