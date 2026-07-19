@@ -1,0 +1,48 @@
+# Minecraft LAN Server — Raspberry Pi 5 优化配置
+# 适用于 RPi5 (8GB), Debian 13 ARM64
+
+[server]
+host = "0.0.0.0"
+port = 25565
+max_players = 20
+motd = "Minecraft RPi5 LAN Server"
+online_mode = false
+compression_threshold = 256
+protocol_version = 776
+version_name = "26.2"
+
+[lan]
+enabled = true
+broadcast_interval_ms = 1500
+multicast_group = "224.0.2.60"
+multicast_port = 4445
+broadcast_motd = true
+
+[world]
+name = "world"
+view_distance = 6              # 降低视距以节省 CPU
+simulation_distance = 4
+difficulty = "normal"
+gamemode = "survival"
+generator = "flat"
+
+[performance]
+tick_rate = 20
+chunk_threads = 2              # Cortex-A76 4核 → 2核给 server
+max_chunks_in_memory = 512     # 限制内存使用
+entity_broadcast_radius = 48.0
+
+[persistence]
+save_interval_ticks = 12000    # 10分钟保存一次
+region_format = "anvil"
+player_db = "sqlite://data/players.db"
+
+[admin]
+rcon_enabled = false
+rcon_port = 25575
+rcon_password = ""
+console_enabled = false        # systemd 管理下不需要 tty
+
+[metrics]
+prometheus_enabled = false
+prometheus_port = 9090

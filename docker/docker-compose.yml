@@ -1,0 +1,67 @@
+# Minecraft LAN Server — Docker Compose
+#
+# Usage:
+#   docker compose up -d                    # Start in background
+#   docker compose down                     # Stop
+#   docker compose logs -f mc-server        # View logs
+#   docker compose exec mc-server bash      # Enter container
+
+version: "3.9"
+
+services:
+  mc-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      # For native RPi5 build, use:
+      # dockerfile: docker/Dockerfile.native
+    image: mc-server:latest
+    container_name: mc-lan-server
+    restart: unless-stopped
+
+    ports:
+      - "25565:25565/tcp"       # Minecraft
+      - "4445:4445/udp"         # LAN broadcast (optional)
+      # - "9090:9090/tcp"       # Prometheus metrics (optional, enable in config)
+
+    volumes:
+      - ../config:/app/config:ro     # Config read-only
+      - mc-data:/app/data            # Persistent world + player data
+
+    environment:
+      - MCS_CONFIG=/app/config/default.toml
+      - RUST_LOG=info
+
+    # Resource limits for RPi5
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+    networks:
+      - mc-net
+
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mc-data:
+    driver: local
+
+networks:
+  mc-net:
+    driver: bridge

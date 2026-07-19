@@ -1,0 +1,45 @@
+[Unit]
+Description=Minecraft LAN Server
+Documentation=https://github.com/antifield26/MinecraftServer_Rust
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=minecraft
+Group=minecraft
+WorkingDirectory=/opt/mc-server
+ExecStart=/opt/mc-server/mc-server
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=on-failure
+RestartSec=10
+
+# Environment
+Environment=MCS_CONFIG=/opt/mc-server/config/rpi5.toml
+Environment=RUST_LOG=info
+
+# Resource limits (RPi5 8GB)
+MemoryMax=6G
+CPUQuota=200%
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/mc-server/data
+ReadOnlyPaths=/opt/mc-server/config
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@network-io @file-system @signal @process
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mc-server
+
+[Install]
+WantedBy=multi-user.target

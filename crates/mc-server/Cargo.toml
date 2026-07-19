@@ -1,0 +1,36 @@
+[package]
+name = "mc-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mc-server"
+path = "src/main.rs"
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tikv-jemallocator = "0.6"
+
+[dependencies]
+mc-core = { workspace = true }
+mc-protocol = { workspace = true }
+mc-network = { workspace = true }
+mc-world = { workspace = true }
+mc-player = { workspace = true }
+mc-persistence = { workspace = true }
+mc-command = { workspace = true }
+mc-admin = { workspace = true }
+mc-plugin = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+uuid = { workspace = true }
+fastrand = { workspace = true }
+rayon = { workspace = true }

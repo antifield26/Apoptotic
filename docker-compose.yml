@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  mc-server:
+    build: .
+    container_name: minecraft-lan-server
+    ports:
+      - "25565:25565"   # Minecraft
+      - "25575:25575"   # RCON (optional)
+      - "9100:9100"     # Prometheus metrics
+    volumes:
+      - ./config:/home/minecraft/config:ro
+      - ./data:/home/minecraft/data
+    environment:
+      - MCS_SERVER__PORT=25565
+      - MCS_CONFIG=/home/minecraft/config/default.toml
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "echo", "health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Optional: Prometheus + Grafana for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mc-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    profiles: ["monitoring"]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mc-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    profiles: ["monitoring"]

@@ -1,0 +1,24 @@
+# RPi5-specific: optimize for Cortex-A76 (ARMv8.2-A + NEON)
+[target.aarch64-unknown-linux-gnu]
+rustflags = [
+    "-C", "target-cpu=cortex-a76",
+    "-C", "target-feature=+neon,+v8.2a,+lse,+rcpc,+fp-armv8",
+    "-C", "link-arg=-Wl,-z,now",
+    "-C", "llvm-args=-enable-machine-outliner",
+    "-C", "llvm-args=-enable-load-pre",
+]
+# Cross-compilation linker
+# linker = "aarch64-linux-gnu-gcc"
+
+# Enable LTO for all targets in release
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+# Jemalloc environment tuning — reduces RSS by ~15% and improves allocation throughput
+# Set via environment: MALLOC_CONF="background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000,narenas:4,lg_tcache_max:16"
+[env]
+MALLOC_CONF = { value = "background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000,narenas:4,lg_tcache_max:16", force = false }

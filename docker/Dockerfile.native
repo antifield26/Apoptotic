@@ -1,0 +1,40 @@
+# ═══════════════════════════════════════════════════════
+# Native ARM64 build — for building directly on Raspberry Pi 5
+# ═══════════════════════════════════════════════════════
+FROM rust:1.85-slim-bookworm AS builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        pkg-config \
+        libssl-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Cache dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY config/ config/
+
+# Build release binary with RPi5 optimizations
+RUN RUSTFLAGS="-C target-cpu=cortex-a76" cargo build --release
+
+# Runtime
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libsqlite3-0 \
+        && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /build/target/release/mc-server /app/mc-server
+COPY config/ /app/config/
+RUN mkdir -p /app/data
+
+EXPOSE 25565 9090
+VOLUME ["/app/data", "/app/config"]
+ENV MCS_CONFIG=/app/config/default.toml
+ENTRYPOINT ["/app/mc-server"]

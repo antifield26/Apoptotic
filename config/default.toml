@@ -1,0 +1,82 @@
+# Minecraft LAN Server — 默认配置
+# 环境变量覆盖: MCS_SECTION__KEY=value
+
+[server]
+host = "0.0.0.0"
+port = 25565
+max_players = 20
+motd = "Minecraft LAN Server"
+online_mode = false
+compression_threshold = 256
+protocol_version = 776
+version_name = "26.2"
+
+[lan]
+enabled = true
+broadcast_interval_ms = 1500
+multicast_group = "224.0.2.60"
+multicast_port = 4445
+broadcast_motd = true
+
+[world]
+name = "world"
+view_distance = 8
+simulation_distance = 6
+difficulty = "normal"
+gamemode = "survival"
+generator = "flat"
+
+# ═══════════════════════════════════════════════════
+# 地形生成器配置
+# ═══════════════════════════════════════════════════
+# 内置生成器:
+#   "flat"  — 超平坦 (bedrock + stone + dirt + grass)
+#   "noise" — 噪声地形 (hash-based 起伏)
+#   "empty" — 虚空
+#   "custom" — 自定义 (通过下方 generator_options 配置)
+#   "compose" — 组合多个生成器叠加
+#
+# ── 自定义层状生成器 ──
+# [world.generator_options]
+# mode = "layered"
+# layers = [
+#     { block = "bedrock", thickness = 1 },            # y=-64
+#     { block = "stone", thickness = 64 },             # y=-63..0
+#     { block = "dirt", thickness = 3 },               # y=1..3
+#     { block = "grass_block", thickness = 1 },        # y=4
+# ]
+#
+# ── 自定义噪声生成器 ──
+# [world.generator_options]
+# mode = "heightmap"
+# base_height = "-59"
+# amplitude = "20"
+# surface_block = "grass_block"
+# subsurface_block = "dirt"
+# deep_block = "stone"
+#
+# ── 组合生成器 ──
+# generator = "compose"
+# [world.generator_options]
+# generators = "noise,flat"   # noise 地形 + flat 覆盖层
+
+[performance]
+tick_rate = 20
+chunk_threads = 2
+max_chunks_in_memory = 1024
+entity_broadcast_radius = 64.0
+
+[persistence]
+save_interval_ticks = 6000
+region_format = "anvil"
+player_db = "sqlite://data/players.db"
+
+[admin]
+rcon_enabled = false
+rcon_port = 25575
+rcon_password = ""
+console_enabled = true
+
+[metrics]
+prometheus_enabled = false
+prometheus_port = 9100

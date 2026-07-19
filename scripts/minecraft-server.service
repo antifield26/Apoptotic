@@ -1,0 +1,44 @@
+[Unit]
+Description=Minecraft LAN Server
+Documentation=https://github.com/antifield26/MinecraftServer_Rust
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=minecraft
+Group=minecraft
+WorkingDirectory=/home/minecraft
+ExecStart=/home/minecraft/mc-server
+ExecStop=/bin/kill -SIGTERM $MAINPID
+Restart=always
+RestartSec=10
+
+# 优雅关闭
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mc-server
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/minecraft/data /home/minecraft/config
+ReadOnlyPaths=/home/minecraft/mc-server
+PrivateTmp=yes
+
+# systemd watchdog: 服务器每 15s ping, 30s 无响应→自动重启
+WatchdogSec=30s
+
+# 资源限制
+LimitNOFILE=65536
+MemoryMax=6G
+CPUQuota=300%
+
+[Install]
+WantedBy=multi-user.target

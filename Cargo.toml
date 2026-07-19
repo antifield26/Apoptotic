@@ -1,0 +1,98 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/mc-core",
+    "crates/mc-protocol",
+    "crates/mc-network",
+    "crates/mc-world",
+    "crates/mc-player",
+    "crates/mc-persistence",
+    "crates/mc-command",
+    "crates/mc-admin",
+    "crates/mc-server",
+    "crates/mc-plugin",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = ""
+
+[workspace.dependencies]
+# async runtime
+tokio = { version = "1", features = ["full"] }
+
+# concurrent data structures
+dashmap = "6"
+parking_lot = "0.12"
+
+# logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+bincode = "1"
+uuid = { version = "1", features = ["v3", "v4"] }
+
+# database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# compression
+flate2 = "1"
+
+# crypto (for online mode — used by individual crates)
+rsa = "0.9"
+aes = "0.8"
+cfb-mode = "0.8"
+sha1 = "0.10"
+hex = "0.4"
+
+# http client (Mojang API for online mode)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# random
+rand = "0.8"
+fastrand = "2"
+
+# nbt
+fastnbt = "2"
+
+# parallel computation
+rayon = "1"
+
+# lock-free atomic references
+arc-swap = "1"
+
+# fast compression (NEON auto-vectorized via target-cpu=cortex-a76)
+lz4_flex = "0.11"
+
+# noise generation
+noise = "0.9"
+
+# admin
+prometheus = "0.13"
+
+# internal crates
+mc-core = { path = "crates/mc-core" }
+mc-protocol = { path = "crates/mc-protocol" }
+mc-network = { path = "crates/mc-network" }
+mc-world = { path = "crates/mc-world" }
+mc-player = { path = "crates/mc-player" }
+mc-persistence = { path = "crates/mc-persistence" }
+mc-command = { path = "crates/mc-command" }
+mc-admin = { path = "crates/mc-admin" }
+mc-plugin = { path = "crates/mc-plugin" }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 1

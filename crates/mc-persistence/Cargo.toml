@@ -1,0 +1,19 @@
+[package]
+name = "mc-persistence"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mc-core = { workspace = true }
+mc-world = { workspace = true }
+mc-player = { workspace = true }
+rusqlite = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+fastnbt = { workspace = true }
+flate2 = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }

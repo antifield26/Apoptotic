@@ -1,0 +1,46 @@
+# Minecraft LAN Server — 生产环境配置 (Raspberry Pi 5 优化)
+# 使用: cp config/production.toml config/default.toml
+# 环境变量覆盖: MCS_SECTION__KEY=value
+
+[server]
+host = "0.0.0.0"
+port = 25565
+max_players = 8
+motd = "Minecraft LAN Server"
+online_mode = false
+compression_threshold = 256
+protocol_version = 776
+version_name = "26.2"
+
+[lan]
+enabled = true
+broadcast_interval_ms = 1500
+
+[world]
+name = "world"
+view_distance = 6           # RPi 5: 减小视距以节省内存
+simulation_distance = 6
+difficulty = "normal"
+gamemode = "survival"
+generator = "noise"         # 噪声地形 (更具可玩性)
+seed = ""                   # 留空 = 随机种子
+
+[performance]
+tick_rate = 20
+chunk_threads = 2
+max_chunks_in_memory = 512  # RPi 5: 限制内存使用
+entity_broadcast_radius = 64.0
+
+[persistence]
+save_interval_ticks = 6000  # 5 分钟自动保存
+player_db = "sqlite://data/players.db"
+
+[admin]
+rcon_enabled = true
+rcon_port = 25575
+rcon_password = "change-me"
+console_enabled = true
+
+[metrics]
+prometheus_enabled = true
+prometheus_port = 9100

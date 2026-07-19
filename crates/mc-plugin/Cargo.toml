@@ -1,0 +1,23 @@
+[package]
+name = "mc-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+wasm-runtime = []  # Enable WASM plugin execution (requires extism)
+
+[dependencies]
+mc-core = { workspace = true }
+mc-player = { workspace = true }
+mc-world = { workspace = true }
+mc-command = { workspace = true }
+mc-protocol = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+tokio = { workspace = true }
+# extism = "1"  # WASM runtime — uncomment to enable .wasm plugin support

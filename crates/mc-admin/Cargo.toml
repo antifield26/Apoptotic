@@ -1,0 +1,18 @@
+[package]
+name = "mc-admin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mc-core = { workspace = true }
+mc-command = { workspace = true }
+mc-player = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha1 = { workspace = true }
+hex = { workspace = true }
+prometheus = { workspace = true, optional = true }

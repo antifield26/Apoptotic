@@ -1,0 +1,14 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "group": "equipment",
+    "pattern": [
+        "WIW",
+        "WWW",
+        " W "
+    ],
+    "key": {
+        "W": { "item": "minecraft:oak_planks" },
+        "I": { "item": "minecraft:iron_ingot" }
+    },
+    "result": { "item": "minecraft:shield", "count": 1 }
+}
