@@ -2742,6 +2742,7 @@ async fn play_loop(
                             vel_x: dx, vel_y: dy, vel_z: dz,
                             damage: base_damage, ticks_alive: 0, max_ticks: 1200, in_ground: false,
                             power_level: power_lvl, flame_level: flame_lvl, punch_level: punch_lvl, piercing_level: 0,
+                            loyalty_level: 0, launch_y: py + 1.6,
                         };
                         server.mob_manager.projectiles.insert(arrow_eid, proj);
                         // Infinity check
@@ -2792,7 +2793,7 @@ async fn play_loop(
                                 position: mc_core::position::Position::new(px, py + 1.6, pz),
                                 vel_x: dx, vel_y: dy, vel_z: dz,
                                 damage: if has_firework { 5.0 } else { 3.0 }, ticks_alive: 0, max_ticks: 1200, in_ground: false,
-                                power_level: 0, flame_level: 0, punch_level: 0, piercing_level: piercing_lvl,
+                                power_level: 0, flame_level: 0, punch_level: 0, piercing_level: piercing_lvl, loyalty_level: 0, launch_y: py + 1.6,
                             };
                             server.mob_manager.projectiles.insert(ceid, proj);
                         }
@@ -2841,7 +2842,7 @@ async fn play_loop(
                                 position: mc_core::position::Position::new(px, py + 1.6, pz),
                                 vel_x: dx, vel_y: dy, vel_z: dz,
                                 damage: base_dmg, ticks_alive: 0, max_ticks: if loyalty { 1200 } else { 600 }, in_ground: false,
-                                power_level: if has_channeling { 1 } else { 0 }, flame_level: 0, punch_level: 0, piercing_level: 0,
+                                power_level: if has_channeling { 1 } else { 0 }, flame_level: 0, punch_level: 0, piercing_level: 0, loyalty_level: if loyalty { 3 } else { 0 }, launch_y: py + 1.6,
                             };
                             server.mob_manager.projectiles.insert(teid, proj);
                         }

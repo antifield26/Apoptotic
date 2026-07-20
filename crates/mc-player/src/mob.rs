@@ -119,6 +119,10 @@ pub struct Projectile {
     pub ticks_alive: u16,
     pub max_ticks: u16,
     pub in_ground: bool,
+    /// Loyalty level (trident return to owner on ground)
+    pub loyalty_level: u8,
+    /// Launch Y position (firework explosion trigger)
+    pub launch_y: f64,
     /// Enchantment levels from the launching weapon (for hit effects)
     pub power_level: u8,
     pub flame_level: u8,
@@ -158,8 +162,8 @@ impl MobManager {
         }
     }
 
-    /// Spawn a projectile entity (returns the new entity ID)
-    pub fn spawn_projectile(
+    /// Spawn a projectile with enchantment levels (returns the new entity ID)
+    pub fn spawn_projectile_enchanted(
         &self,
         owner_uuid: Uuid,
         owner_entity_id: i32,
@@ -167,6 +171,8 @@ impl MobManager {
         x: f64, y: f64, z: f64,
         vel_x: f64, vel_y: f64, vel_z: f64,
         damage: f32,
+        loyalty: u8,
+        launch_y: f64,
     ) -> i32 {
         let eid = self.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let proj = Projectile {
@@ -180,13 +186,26 @@ impl MobManager {
             ticks_alive: 0,
             max_ticks: projectile_type.max_ticks(),
             in_ground: false,
-            power_level: 0,
-            flame_level: 0,
-            punch_level: 0,
-            piercing_level: 0,
+            loyalty_level: loyalty,
+            launch_y,
+            power_level: 0, flame_level: 0, punch_level: 0, piercing_level: 0,
         };
         self.projectiles.insert(eid, proj);
         eid
+    }
+
+    /// Spawn a projectile entity (returns the new entity ID)
+    pub fn spawn_projectile(
+        &self,
+        owner_uuid: Uuid,
+        owner_entity_id: i32,
+        projectile_type: ProjectileType,
+        x: f64, y: f64, z: f64,
+        vel_x: f64, vel_y: f64, vel_z: f64,
+        damage: f32,
+    ) -> i32 {
+        self.spawn_projectile_enchanted(owner_uuid, owner_entity_id, projectile_type,
+            x, y, z, vel_x, vel_y, vel_z, damage, 0, y)
     }
 
     /// Tick all active projectiles — update positions, check collisions, despawn expired
@@ -205,11 +224,23 @@ impl MobManager {
             }
 
             if proj.in_ground {
-                // Stuck in ground — wait for despawn timer, no movement
-                if proj.ticks_alive > 100 { // 5 seconds stuck
+                // Loyalty trident: return to owner after delay (shorter with higher level)
+                if proj.projectile_type == ProjectileType::Trident && proj.loyalty_level > 0 {
+                    let return_delay = (5 - proj.loyalty_level as u16).max(1) * 20; // 1-3s
+                    if proj.ticks_alive > return_delay {
+                        events.push(ProjectileEvent::ReturnToOwner(proj.entity_id, proj.owner_uuid));
+                        to_remove.push(proj.entity_id);
+                    }
+                } else if proj.ticks_alive > 100 {
                     to_remove.push(proj.entity_id);
                     events.push(ProjectileEvent::Despawn(proj.entity_id));
                 }
+                continue;
+            }
+            // Firework: explode on max tick or ground impact
+            if proj.projectile_type == ProjectileType::Firework && proj.vel_y <= 0.0 && proj.position.y < proj.launch_y {
+                to_remove.push(proj.entity_id);
+                events.push(ProjectileEvent::Explode(proj.entity_id, proj.position.x, proj.position.y, proj.position.z, proj.damage));
                 continue;
             }
 
@@ -1659,6 +1690,8 @@ pub enum ProjectileEvent {
     Despawn(i32),       // entity_id to remove
     HitEntity(i32, i32), // projectile_eid, target_eid
     HitBlock(i32, i32, i32, i32), // projectile_eid, x, y, z
+    ReturnToOwner(i32, Uuid), // projectile_eid, owner_uuid (loyalty trident)
+    Explode(i32, f64, f64, f64, f32), // entity_id, x, y, z, damage (firework)
 }
 
 /// 获取生物的最大生命值

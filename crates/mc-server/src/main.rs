@@ -795,11 +795,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         mob_manager.register(cloud);
                                     }
                                 }
-                            // Loyalty trident: return to owner when expired
+                            // ReturnToOwner: trident with loyalty returns to owner
+                            if let mc_player::mob::ProjectileEvent::ReturnToOwner(eid, owner) = ev {
+                                let trident_item = mc_core::block::BlockState::new(940);
+                                let _ = player_manager.add_item_to_player(owner, trident_item, 1);
+                                mob_manager.projectiles.remove(eid);
+                                continue;
+                            }
+                            // Explode: firework/crossbow explosion at location
+                            if let mc_player::mob::ProjectileEvent::Explode(eid, ex, ey, ez, dmg) = ev {
+                                for player in player_manager.all_players() {
+                                    let dx = player.position.x - ex;
+                                    let dy = (player.position.y + 1.0) - ey;
+                                    let dz = player.position.z - ez;
+                                    let dist = (dx*dx + dy*dy + dz*dz).sqrt();
+                                    if dist < 4.0 {
+                                        let falloff = 1.0 - (dist / 4.0);
+                                        let _ = player_manager.apply_damage(&player.uuid, dmg * falloff as f32, tick_count);
+                                    }
+                                }
+                                mob_manager.projectiles.remove(eid);
+                                continue;
+                            }
+                            // Loyalty trident: return to owner when despawned
                             if proj.projectile_type == mc_player::mob::ProjectileType::Trident
+                                && proj.loyalty_level > 0
                                 && proj.owner_uuid != uuid::Uuid::nil() {
-                                    // Return trident to owner inventory
-                                    let trident_item = mc_core::block::BlockState::new(940); // trident item ID
+                                    let trident_item = mc_core::block::BlockState::new(940);
                                     let _ = player_manager.add_item_to_player(&proj.owner_uuid, trident_item, 1);
                                 }
                             // Channeling trident: spawn lightning on hit
