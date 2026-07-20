@@ -1613,6 +1613,76 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
     // Purpur (1327, 1328)
     add_stairs(reg, "purpur_stairs", 439, 1327);
     add_slab(reg, "purpur_slab", 439, 1328);
+    // Purpur pillar (1326) — 2 purpur slabs
+    reg.add(Recipe { id: "minecraft:purpur_pillar".into(), group: "building".into(), category: 0,
+        width: 1, height: 2,
+        ingredients: vec![vec![1328], vec![1328]],
+        is_shapeless: false, result_item: 1326, result_count: 1,
+    });
+
+    // ═══ Banner patterns (6 basic patterns) ═══
+    let paper_v = vec![1045u32];
+    let oxeye = vec![1007u32]; let _cornflower = [1008u32]; let _lily = [1009u32];
+    let _rose = [1010u32]; let _tulip = [1011u32]; let wither_skull_v = vec![1012u32];
+    let creeper_head = vec![1013u32]; let vine_v = vec![141u32]; let brick_v = vec![103u32];
+    // Flower charge: paper + oxeye daisy
+    reg.add(Recipe { id: "minecraft:flower_banner_pattern".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![paper_v.clone(), oxeye],
+        is_shapeless: false, result_item: 1000, result_count: 1,
+    });
+    // Creeper charge: paper + creeper head
+    reg.add(Recipe { id: "minecraft:creeper_banner_pattern".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![paper_v.clone(), creeper_head],
+        is_shapeless: false, result_item: 1001, result_count: 1,
+    });
+    // Skull charge: paper + wither skull
+    reg.add(Recipe { id: "minecraft:skull_banner_pattern".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![paper_v.clone(), wither_skull_v],
+        is_shapeless: false, result_item: 1002, result_count: 1,
+    });
+    // Thing: paper + enchanted golden apple
+    reg.add(Recipe { id: "minecraft:mojang_banner_pattern".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![paper_v.clone(), vec![774u32]],
+        is_shapeless: false, result_item: 1003, result_count: 1,
+    });
+    // Globe: paper + vine
+    reg.add(Recipe { id: "minecraft:globe_banner_pattern".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![paper_v, vine_v],
+        is_shapeless: false, result_item: 1004, result_count: 1,
+    });
+    // Field masoned: paper + bricks
+    reg.add(Recipe { id: "minecraft:field_masoned_banner_pattern".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![vec![1045], brick_v],
+        is_shapeless: false, result_item: 1005, result_count: 1,
+    });
+
+    // ═══ Fireworks ═══
+    let gunpowder = vec![933u32]; let paper_single = vec![1045u32];
+    // Firework rocket: paper + gunpowder → 3
+    reg.add(Recipe { id: "minecraft:firework_rocket".into(), group: "misc".into(), category: 2,
+        width: 1, height: 2, ingredients: vec![paper_single.clone(), gunpowder.clone()],
+        is_shapeless: false, result_item: 1048, result_count: 3,
+    });
+    // Firework star: gunpowder + dye → 1 (shapeless)
+    for i in 0..16u32 {
+        let dye = [991,981,988,1302,980,987,986,985,984,983,982,979,989,978,977,990][i as usize];
+        reg.add(Recipe { id: format!("minecraft:firework_star_{}", i), group: "misc".into(), category: 2,
+            width: 1, height: 2,
+            ingredients: vec![gunpowder.clone(), vec![dye]],
+            is_shapeless: true, result_item: 1049 + i, result_count: 1,
+        });
+    }
+
+    // ═══ Smithing trim: armor trim duplication (7 templates) ═══
+    let diamond_gem = vec![777u32]; let cobbled = vec![12u32];
+    for (template_id, name) in [(1014,"sentry"),(1015,"vex"),(1016,"wild"),(1017,"coast"),(1018,"dune"),(1019,"ward"),(1020,"eye")] {
+        // Each template: 7 diamonds + 1 cobbled variant → 2 templates
+        reg.add(Recipe { id: format!("minecraft:{}_armor_trim_duplicate", name), group: "misc".into(), category: 2,
+            width: 1, height: 3,
+            ingredients: vec![diamond_gem.clone(), vec![template_id], cobbled.clone()],
+            is_shapeless: false, result_item: template_id, result_count: 2,
+        });
+    }
 
     // ═══ Additional food: baked potato, cooked meats, golden foods ═══
     // Cooked porkchop (smelted from raw porkchop — furnace recipe; here as crafting placeholder)
@@ -1624,6 +1694,22 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
         ingredients: vec![vec![113u32], vec![114u32], vec![915u32], vec![202u32]], // red + brown mushroom + bowl + poppy
         is_shapeless: true, result_item: 876, result_count: 1,
     });
+    // ═══ Tipped arrows (4 lingering variants) ═══
+    let arrow_item = vec![943u32];
+    for (potion_type, name) in [(996,"slowness"),(997,"poison"),(998,"weakness"),(999,"harming")] {
+        reg.add(Recipe { id: format!("minecraft:tipped_arrow_{}", name), group: "combat".into(), category: 1,
+            width: 1, height: 3,
+            ingredients: vec![arrow_item.clone(), arrow_item.clone(), vec![potion_type], arrow_item.clone(), arrow_item.clone(), vec![potion_type], arrow_item.clone(), arrow_item.clone(), vec![potion_type]],
+            is_shapeless: false, result_item: potion_type + 40, result_count: 8,
+        });
+    }
+    // Shield banner: shield + banner → shield with pattern
+    reg.add(Recipe { id: "minecraft:shield_banner".into(), group: "combat".into(), category: 1,
+        width: 1, height: 2,
+        ingredients: vec![vec![895], vec![898]],
+        is_shapeless: true, result_item: 1047, result_count: 1,
+    });
+
     // Dried kelp: from kelp block (1→9)
     reg.add(Recipe { id: "minecraft:dried_kelp".into(), group: "food".into(), category: 2,
         width: 1, height: 1,
