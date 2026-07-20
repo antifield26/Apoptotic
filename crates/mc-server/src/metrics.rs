@@ -122,6 +122,26 @@ pub async fn serve_metrics(
                 return;
             }
 
+            // GET /status — JSON status page
+            if request.contains("GET /status") {
+                let memory = estimate_memory_mb();
+                let online = pm.online_count();
+                let cs_count = cs.count();
+                let uptime_secs = start.elapsed().as_secs();
+                let (_p50, tps_p95, _p99) = compute_tps_percentiles();
+                let tps_str = if tps_p95 > 0 { format!("{}", 1_000_000 / tps_p95.max(1)) } else { "N/A".to_string() };
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n\
+                     {{\"server\":\"Apoptotic\",\"version\":\"26.2\",\
+                     \"players\":{0},\"chunks\":{1},\
+                     \"uptime_seconds\":{2},\"tps_p95\":{3},\
+                     \"memory_mb\":{4},\"status\":\"running\"}}",
+                    online, cs_count, uptime_secs, tps_str, memory
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
             // Only respond to GET /metrics
             if !request.contains("GET /metrics") {
                 let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\n\r\n").await;
