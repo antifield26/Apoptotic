@@ -107,6 +107,8 @@ impl RecipeRegistry {
 
         // ═══ Batch recipes: doors, trapdoors, fences, slabs, stairs, dyed blocks ═══
         add_variant_recipes(self);
+        // ═══ 26.2 Stonecutter conversion recipes ═══
+        add_stonecutter_recipes(self);
     }
 
     fn add(&mut self, recipe: Recipe) {
@@ -3294,7 +3296,89 @@ fn add_variant_recipes(reg: &mut RecipeRegistry) {
         });
     }}
 }
-// Helper: concrete block IDs (16 colors)
+
+fn add_stonecutter_recipes(reg: &mut RecipeRegistry) {
+    let sc: &[(u32, u32, u8)] = &[
+        (1, 27, 2), (1, 28, 1), (12, 29, 2), (12, 30, 1), (12, 31, 1),
+        (27, 32, 2), (27, 33, 1), (24, 35, 2), (24, 36, 1),
+        (45, 42, 2), (45, 43, 1), (45, 44, 1),
+        (112, 46, 2), (112, 47, 1),
+        (1341, 1343, 2), (1341, 1342, 1), (1341, 1344, 1),
+        (1349, 1351, 2), (1349, 1350, 1), (1349, 1352, 1),
+        (1240, 1242, 2), (1240, 1241, 1), (1253, 1255, 2), (1253, 1254, 1),
+        (1357, 1361, 4), (1358, 1362, 4), (1359, 1363, 4), (1360, 1364, 4),
+        // Tuff, Granite, Diorite, Andesite, Prismarine
+        (2, 1487, 2), (2, 1486, 1), (2, 1488, 1),   // granite
+        (3, 1487, 2), (3, 1486, 1),                    // diorite→slab/stairs (reuse tuff IDs as placeholder)
+        (4, 1487, 2), (4, 1486, 1),                    // andesite
+        (168, 48, 2), (168, 49, 1),                     // prismarine
+        (169, 50, 2), (169, 51, 1),                     // dark_prismarine
+    ];
+    for (input, output, count) in sc {
+        reg.add(Recipe {
+            id: format!("minecraft:stonecutter_{}_to_{}", input, output),
+            group: "stonecutter".into(), category: 2,
+            width: 1, height: 1,
+            ingredients: vec![vec![*input]],
+            is_shapeless: true, result_item: *output, result_count: *count,
+        });
+    }
+    // ── Bulk slab/stairs/wall crafting recipes ──
+    let slab_sources: &[(u32, u32, &str)] = &[
+        (2, 1487, "granite"), (3, 1487, "diorite"), (4, 1487, "andesite"),
+        (1240, 1242, "sulfur"), (1253, 1255, "cinnabar"),
+        (1424, 1426, "polished_tuff"), (1493, 1495, "tuff_brick"),
+        (1357, 1369, "cut_copper"), (1373, 1385, "waxed_cut_copper"),
+    ];
+    for (src, slab, name) in slab_sources {
+        reg.add(Recipe {
+            id: format!("minecraft:{}_slab_craft", name), group: "slabs".into(), category: 0,
+            width: 3, height: 1,
+            ingredients: vec![vec![*src], vec![*src], vec![*src]],
+            is_shapeless: false, result_item: *slab, result_count: 6,
+        });
+    }
+    // ── Copper block compacting ──
+    reg.add(Recipe {
+        id: "minecraft:copper_block_from_ingot".into(), group: "building".into(), category: 0,
+        width: 3, height: 3,
+        ingredients: vec![vec![778],vec![778],vec![778], vec![778],vec![778],vec![778], vec![778],vec![778],vec![778]],
+        is_shapeless: false, result_item: 1357, result_count: 1,
+    });
+    // ── Potent Sulfur crafting: 9 sulfur → 1 potent sulfur ──
+    reg.add(Recipe {
+        id: "minecraft:potent_sulfur".into(), group: "building".into(), category: 0,
+        width: 3, height: 3,
+        ingredients: vec![vec![1240],vec![1240],vec![1240], vec![1240],vec![1240],vec![1240], vec![1240],vec![1240],vec![1240]],
+        is_shapeless: false, result_item: 1252, result_count: 1,
+    });
+    // ── Sulfur Spike: 4 spikes → 1 sulfur block ──
+    reg.add(Recipe {
+        id: "minecraft:sulfur_block_from_spikes".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1251],vec![1251], vec![1251],vec![1251]],
+        is_shapeless: false, result_item: 1240, result_count: 1,
+    });
+    // ── Tuff compacting: 4 tuff → polished_tuff ──
+    reg.add(Recipe {
+        id: "minecraft:polished_tuff".into(), group: "building".into(), category: 0,
+        width: 2, height: 2,
+        ingredients: vec![vec![1493],vec![1493], vec![1493],vec![1493]],
+        is_shapeless: false, result_item: 1424, result_count: 4,
+    });
+    // ── Waxed copper: honeycomb + copper → waxed (single-item recipes) ──
+    for (unwaxed, waxed, name) in [
+        (1357u32, 1373u32, "waxed_copper"), (1361, 1377, "waxed_cut_copper"),
+    ] {
+        reg.add(Recipe {
+            id: format!("minecraft:{}_from_honeycomb", name), group: "building".into(), category: 2,
+            width: 1, height: 1,
+            ingredients: vec![vec![unwaxed]],
+            is_shapeless: true, result_item: waxed, result_count: 1,
+        });
+    }
+}
+
 fn concrete_ids(idx: u32) -> u32 {
     [1094,1095,1096,1097,1098,1099,1100,1101,1102,1103,1104,1105,1106,1107,1108,1109][idx as usize]
 }

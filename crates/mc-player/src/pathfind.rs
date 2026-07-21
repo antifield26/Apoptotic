@@ -5,9 +5,18 @@
 //! - 最多 256 个节点
 //! - 每 40 tick 重新计算一次
 //! - 无路径时回退到直接追逐
+//! - LRU 缓存: 相同起点/终点复用路径 (DashMap, 64 entry cap)
 
+use dashmap::DashMap;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
+use std::sync::LazyLock;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+
+/// Path cache entry: (src_chunk, dst_chunk) → (waypoints, access_counter)
+static PATH_CACHE: LazyLock<DashMap<(i32, i32, i32, i32), (Vec<(f64, f64, f64)>, AtomicU64)>> =
+    LazyLock::new(DashMap::new);
+static CACHE_MAX: usize = 64;
 
 /// 2D 寻路节点
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -58,6 +67,15 @@ pub fn find_path(
     let max_dist = 16;
     if (sx - tx).abs() > max_dist || (sz - tz).abs() > max_dist {
         return vec![(target_x, target_y, target_z)]; // too far, direct chase
+    }
+
+    // Check path cache (keyed by chunk coordinates)
+    let scx = sx.div_euclid(16); let scz = sz.div_euclid(16);
+    let tcx = tx.div_euclid(16); let tcz = tz.div_euclid(16);
+    let cache_key = (scx, scz, tcx, tcz);
+    if let Some(entry) = PATH_CACHE.get(&cache_key) {
+        entry.1.fetch_add(1, AtomicOrdering::Relaxed);
+        return entry.0.clone();
     }
 
     // A* search (simplified 2D)
@@ -145,7 +163,22 @@ pub fn find_path(
     path.reverse();
 
     // Convert to world coordinates
-    path.into_iter()
+    let waypoints: Vec<(f64, f64, f64)> = path.into_iter()
         .map(|(x, z)| (x as f64 + 0.5, target_y, z as f64 + 0.5))
-        .collect()
+        .collect();
+
+    // Cache the result with LRU eviction
+    if !waypoints.is_empty() && PATH_CACHE.len() < CACHE_MAX {
+        PATH_CACHE.insert(cache_key, (waypoints.clone(), AtomicU64::new(1)));
+    } else if PATH_CACHE.len() >= CACHE_MAX {
+        // Evict least-recently-used entry
+        if let Some(oldest) = PATH_CACHE.iter()
+            .min_by_key(|e| e.value().1.load(AtomicOrdering::Relaxed)) {
+            PATH_CACHE.remove(oldest.key());
+        }
+        if !waypoints.is_empty() {
+            PATH_CACHE.insert(cache_key, (waypoints.clone(), AtomicU64::new(1)));
+        }
+    }
+    waypoints
 }

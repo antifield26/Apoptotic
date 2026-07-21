@@ -416,7 +416,7 @@ impl Command for SummonCommand {
                 max_health: mc_player::mob::mob_max_health(entity_type),
                 age_ticks: 0, ai_timer: 40, ai_state: mc_player::mob::MobAiState::Idle,
                 attack_cooldown: 0, last_sync_tick: 0,
-                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
             };
             mm.register(mob);
             Ok(format!("Summoned {} (type={}) at ({:.1}, {:.1}, {:.1}) [entity_id={}]", entity, entity_type, x, y, z, eid))

@@ -135,8 +135,15 @@ impl BrewingStandData {
 }
 
 /// 酿造台管理
+/// Brew completion event for advancement tracking
+pub struct BrewCompletion {
+    pub position: (i32, i32, i32),
+    pub output_id: u32,
+}
+
 pub struct BrewingStandManager {
     pub stands: HashMap<(i32, i32, i32), BrewingStandData>,
+    pub completed_brews: Vec<BrewCompletion>,
 }
 
 impl Default for BrewingStandManager {
@@ -146,7 +153,12 @@ impl Default for BrewingStandManager {
 }
 
 impl BrewingStandManager {
-    pub fn new() -> Self { Self { stands: HashMap::new() } }
+    pub fn new() -> Self { Self { stands: HashMap::new(), completed_brews: Vec::new() } }
+
+    /// Drain completed brew events for advancement triggering
+    pub fn take_brew_completions(&mut self) -> Vec<BrewCompletion> {
+        std::mem::take(&mut self.completed_brews)
+    }
 
     pub fn get_or_create(&mut self, pos: (i32, i32, i32)) -> &mut BrewingStandData {
         self.stands.entry(pos).or_insert_with(|| BrewingStandData::new(pos))
@@ -176,6 +188,14 @@ impl BrewingStandManager {
                     }
                     stand.fuel = stand.fuel.saturating_sub(1);
                     stand.brew_ticks = 0;
+                    // Record brew completion for advancement
+                    for i in 0..3 {
+                        if let Some(output_id) = stand.bottle_slots[i] {
+                            self.completed_brews.push(BrewCompletion {
+                                position: stand.pos, output_id,
+                            });
+                        }
+                    }
                 }
             }
         }

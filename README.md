@@ -1,18 +1,20 @@
 # Apoptotic
 
-Rust 实现的 Minecraft Java Edition 26.2 局域网联机服务器，针对 Raspberry Pi 5 优化，支持 2~8 人。
+Rust 实现的 Minecraft Java Edition 26.2 "Chaos Cubed" 局域网联机服务器，针对 Raspberry Pi 5 优化，支持 2~8 人。
 
 [![CI](https://github.com/antifield26/Apoptotic/actions/workflows/ci.yml/badge.svg)](https://github.com/antifield26/Apoptotic/actions/workflows/ci.yml)
 
 ## 特性
 
-- **协议**: Minecraft 26.2 (protocol 776)，73 S2C + 37 C2S Play 包处理器（全部 stub 已功能实现）
-- **世界**: 59 种群系（含 26.2 Sulfur Caves），7 种生成器，13 种结构，9 种树木，4 种地下群系
-- **实体**: 91 种实体类型，~74 种独特 AI，含忠诚三叉戟/火弩烟花/弹射物附魔/驯服/繁殖/骑乘
-- **生存**: 1534 运行时配方 + 480 source 定义（含旗帜/烟花/锻造纹饰/药箭），熔炉，附魔 42 种，酿造 50+，村民 14 职业完整交易，钓鱼，战斗
-- **红石**: 35 组件（含压力板/拌线钩/比较器减法/观察者/hopper 传输/容器填充率检测）
-- **命令**: 63 个，@a/@p/@r/@s 选择器，/execute，tab 补全
+- **协议**: Minecraft 26.2 "Chaos Cubed" (protocol 776)，73 S2C + 37 C2S Play 包处理器（全部 stub 已功能实现）
+- **世界**: 59 种群系（含 26.2 Sulfur Caves），7 种生成器，14 种结构（含 Sulfur Springs），9 种树木，4 种地下群系
+- **实体**: 92 种实体类型，~84 种独特 AI (91%)，含 Sulfur Cube 12 archetype/Bat/Goat/Fox/Panda/Bee/WanderingTrader
+- **生存**: ~1,600 运行时配方（含 Stonecutter 48 + 26.2 Sulfur/Cinnabar/Potent/Waxed），附魔 42/42 连线 (100%)，酿造 50+（含 BrewedPotion 进度），村民 14 职业 + Gossip 声誉
+- **红石**: 39 组件（含 Piston 3D 垂直, Daylight Detector 反转, Sculk Sensor 振动, Lightning Rod）
+- **命令**: 67 个（+/ban-ip /pardon-ip /setidletimeout），@a/@p/@r/@s 选择器，/execute，tab 补全
+- **进度**: 14 个定义 + 4 个连线（Brewing/Trade/Crossbow/Beacon）+ "Uh Oh" (26.2)
 - **效果**: 27/33 连线（82%），含 Speed/Slowness/Haste/MiningFatigue/JumpBoost/Luck/Unluck/ConduitPower/SlowFalling/DolphinGrace/Blindness
+- **26.2 Chaos Cubed**: Sulfur Cube archetype 完整，Potent Sulfur 气体+间歇泉，Sulfur Spike 坠落，Sulfur Springs 结构
 - **安全**: 速率限制 + 路径防护 + Mojang 在线认证 + 2MB 封包限制 + 最大玩家数硬限制 + RCON SHA-1
 - **插件**: NativePlugin trait + WASM 运行时（extism） + DatapackLoader，完整 PDK 文档
 - **运维**: Docker 多架构，Prometheus + Grafana 监控，/status JSON 端点，systemd watchdog，自动备份，CI 三平台 + 安全审计
@@ -63,14 +65,14 @@ GET /status    → {"server":"Apoptotic","tps_p95":"20","memory_mb":128,...}
 
 ```
 crates/
-├── mc-server/        # 入口，tick(15子系统)，自动保存，插件
-├── mc-core/          # BlockState，ItemRegistry(1055)，Effect(33)，Biome(59)，EntityType(91)
+├── mc-server/        # 入口，tick(16子系统)，自动保存，插件，CPU affinity
+├── mc-core/          # BlockState，ItemRegistry(~1563)，Effect(33)，Biome(59)，EntityType(92)
 ├── mc-protocol/      # VarInt，Codec，73 S2C/37 C2S，Registry NBT(62 biomes)
-├── mc-network/       # TCP，LAN广播，状态机，GUI dispatch(21容器)，rate_limiter
-├── mc-world/         # PalettedContainer，Chunk，7 Generator，LZ4，Lighting，Redstone，Fluid
-├── mc-player/        # PlayerManager，Inventory，Container，Recipe(1534)，Mob(~74 AI)，Enchant(42)，Villager(14)，Brewing，Fishing，Combat
+├── mc-network/       # TCP，LAN广播，状态机，GUI dispatch(21容器)，rate_limiter，spatial index
+├── mc-world/         # PalettedContainer，Chunk，7 Generator，LZ4，Lighting，Redstone(39)，Fluid，Physics
+├── mc-player/        # PlayerManager，Inventory，Container，Recipe(~1600)，Mob(~84 AI)，Enchant(42/42)，Villager(14+Gossip)，Brewing，Fishing，Combat，Advancement(14)
 ├── mc-persistence/   # SQLite PlayerDB，WorldSaver(NBT)，LZ4 Linear
-├── mc-command/       # 63 commands，/execute，/scoreboard，/bossbar，/team
+├── mc-command/       # 67 commands (+ban-ip/pardon-ip/setidletimeout)，/execute，/scoreboard，/bossbar，/team
 ├── mc-admin/         # Console，RCON(TCP 25575)
 └── mc-plugin/        # NativePlugin trait，WASM(extism)，DatapackLoader
 ```
@@ -86,6 +88,9 @@ crates/
 - Rayon par_iter spawn chunk 预生成
 - spawn_blocking 异步 I/O
 - LTO + strip + panic=abort
+- **Spatial Hash Grid**: O(1) 邻近查询 (chunk_players 索引)
+- **A* 路径缓存**: 64-entry LRU (chunk→chunk key)
+- **CPU affinity**: tick/IO 线程绑核 (Linux sched_setaffinity)
 - PGO/BOLT/benchmark 脚本（`scripts/`）
 
 ## 插件
@@ -100,11 +105,13 @@ crates/
 
 | 类别 | 覆盖率 |
 |------|--------|
-| 物品注册 | 1055 / ~2200 (48%) |
-| 配方 source | 480 / ~1700 (28% — runtime 1534 覆盖 90%) |
+| 物品注册 | ~1563 / ~2200 (71%) |
+| 配方 runtime | ~1600 / ~1700 (94%) |
 | C2S 处理器 | 37 / 54 (69%，全部 stub 已功能实现) |
 | 状态效果 | 27 / 33 (82%) |
-| 实体 AI | ~74 / 91 (81%) |
+| 实体 AI | ~84 / 92 (91%) |
+| 附魔连线 | 42 / 42 (100%) |
+| 红石组件 | 39 / ~50 (78%) |
 
 ## License
 

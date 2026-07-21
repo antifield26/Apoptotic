@@ -25,6 +25,15 @@ pub enum Criterion {
     FishCaught,
     BredAnimals,
     PlacedBlock { block_id: u32 },
+    BrewedPotion,
+    ConstructedBeacon,
+    ConsumeItem { item_id: u32 },
+    VillagerTrade,
+    CuredZombieVillager,
+    ShotCrossbow,
+    RaidWin,
+    /// 26.2: Sulfur Cube absorbs TNT
+    UhOh,
 }
 
 /// 进度定义
@@ -100,11 +109,20 @@ impl AdvancementRegistry {
             mk("minecraft:end/kill_dragon", "minecraft:end/root", "Free the End", "Kill the Ender Dragon", 122, vec![Criterion::EntityKilled { entity_type: 53 }]),
             mk("minecraft:husbandry/root", "minecraft:story/root", "Husbandry", "The world is full of friends and food", 829, vec![Criterion::InventoryChanged { item_id: 829 }]),
             mk("minecraft:husbandry/tame_animal", "minecraft:husbandry/root", "Best Friends Forever", "Tame an animal", 836, vec![Criterion::TamedAnimal]),
+            // 26.2 Chaos Cubed: "Uh Oh" — Sulfur Cube absorbs TNT
+            mk("minecraft:husbandry/uh_oh", "minecraft:husbandry/root", "Uh Oh", "Have a Sulfur Cube absorb a TNT block", 25, vec![Criterion::UhOh]),
             mk("minecraft:husbandry/fish_fish", "minecraft:husbandry/root", "Fishy Business", "Catch a fish", 844, vec![Criterion::FishCaught]),
             mk("minecraft:adventure/root", "minecraft:story/root", "Adventure", "Adventure, exploration and combat", 940, vec![Criterion::EntityKilled { entity_type: 36 }]),
             mk("minecraft:adventure/kill_a_mob", "minecraft:adventure/root", "Monster Hunter", "Kill any hostile monster", 785, vec![Criterion::EntityKilled { entity_type: 0 }]),
             mk("minecraft:adventure/shoot_arrow", "minecraft:adventure/root", "Take Aim", "Shoot something with an arrow", 774, vec![Criterion::ItemUsed { item_id: 773 }]),
             mk("minecraft:adventure/sniper_duel", "minecraft:adventure/shoot_arrow", "Sniper Duel", "Kill a Skeleton from at least 50 meters", 774, vec![Criterion::EntityKilled { entity_type: 37 }]),
+            mk("minecraft:adventure/ol_betsy", "minecraft:adventure/shoot_arrow", "Ol' Betsy", "Shoot a crossbow", 352, vec![Criterion::ShotCrossbow]),
+            mk("minecraft:adventure/hero_of_the_village", "minecraft:adventure/root", "Hero of the Village", "Defend a village from a raid", 134, vec![Criterion::RaidWin]),
+            mk("minecraft:nether/brew_potion", "minecraft:nether/obtain_blaze_rod", "Local Brewery", "Brew a potion", 374, vec![Criterion::BrewedPotion]),
+            mk("minecraft:nether/create_beacon", "minecraft:nether/obtain_blaze_rod", "Bring Home the Beacon", "Construct and activate a beacon", 138, vec![Criterion::ConstructedBeacon]),
+            mk("minecraft:husbandry/trade", "minecraft:husbandry/root", "What a Deal!", "Trade with a Villager", 134, vec![Criterion::VillagerTrade]),
+            mk("minecraft:husbandry/cure_zombie_villager", "minecraft:husbandry/root", "Zombie Doctor", "Cure a Zombie Villager", 373, vec![Criterion::CuredZombieVillager]),
+            mk("minecraft:husbandry/balanced_diet", "minecraft:husbandry/root", "A Balanced Diet", "Eat everything that is edible", 357, vec![Criterion::ConsumeItem { item_id: 0 }]),
         ] {
             map.insert(k, v);
         }

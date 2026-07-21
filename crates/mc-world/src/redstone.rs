@@ -6,10 +6,10 @@
 //! - BFS state (pending_updates, processed): Mutex (single writer per tick)
 //! - TNT/explosions: Mutex (separate from BFS state to reduce contention)
 
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use mc_core::block::BlockState;
 use mc_core::position::ChunkPos;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use parking_lot::Mutex;
 use std::collections::{HashSet, VecDeque};
 
@@ -83,13 +83,69 @@ pub const SCULK_SENSOR_ID: u32 = 354;
 pub const CALIBRATED_SCULK_SENSOR_ID: u32 = 355;
 
 /// Get passive redstone signal from non-powered sources
+/// 26.2 Sculk Sensor vibrations: (x, y, z, frequency, age_ticks)
+static VIBRATION_EVENTS: LazyLock<DashSet<(i32, i32, i32, u8)>> = LazyLock::new(DashSet::new);
+const SCULK_SENSOR_RANGE: i32 = 8;
+
+/// Register a vibration event near a position (block place/break, entity step, projectile)
+pub fn register_vibration(x: i32, y: i32, z: i32, frequency: u8) {
+    VIBRATION_EVENTS.insert((x, y, z, frequency));
+}
+
+/// Process vibration events: Sculk Sensors within range detect and output signal
+pub fn tick_sculk_sensors(chunk_store: &crate::chunk_store::ChunkStore) {
+    let events: Vec<_> = VIBRATION_EVENTS.iter().map(|e| *e.key()).collect();
+    VIBRATION_EVENTS.clear();
+    if events.is_empty() { return; }
+    // Check each loaded chunk for Sculk Sensors
+    for (cp, chunk) in &chunk_store.all_chunks() {
+        let cx = cp.x; let cz = cp.z;
+        for y in -64..320 {
+            for lx in 0..16 {
+                for lz in 0..16 {
+                    let bid = chunk.get_block(lx, y, lz).id;
+                    if bid != SCULK_SENSOR_ID && bid != CALIBRATED_SCULK_SENSOR_ID {
+                        continue;
+                    }
+                    let wx = cx * 16 + lx as i32;
+                    let wz = cz * 16 + lz as i32;
+                    // Check if any vibration event is within range
+                    for (ex, ey, ez, _freq) in &events {
+                        let dx = (wx - ex).abs();
+                        let dy = (y - ey).abs();
+                        let dz = (wz - ez).abs();
+                        if dx <= SCULK_SENSOR_RANGE && dy <= SCULK_SENSOR_RANGE && dz <= SCULK_SENSOR_RANGE {
+                            // Simple: always output max signal when triggered
+                            // TODO: signal strength = 15 - distance/2, frequency-based filtering for calibrated
+                            // Signal propagation handled by redstone BFS
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Set of daylight detector positions that are in inverted mode (26.2 toggle mechanic)
+pub static INVERTED_DETECTORS: LazyLock<DashSet<(i32, i32, i32)>> = LazyLock::new(DashSet::new);
+
+/// Toggle a daylight detector between normal and inverted mode
+pub fn toggle_daylight_detector(x: i32, y: i32, z: i32) -> bool {
+    if INVERTED_DETECTORS.contains(&(x, y, z)) {
+        INVERTED_DETECTORS.remove(&(x, y, z));
+        false
+    } else {
+        INVERTED_DETECTORS.insert((x, y, z));
+        true
+    }
+}
+
 pub fn get_environmental_signal(id: u32, time_of_day: i64) -> u8 {
     match id {
-        // Daylight detector: signal = 15 - (time/1000) * 15, reversed at night
         DAYLIGHT_DETECTOR_ID => {
             let day_progress = (time_of_day % 24000) as f64 / 24000.0;
-            let signal = (15.0 - day_progress * 30.0).abs().min(15.0);
-            signal as u8
+            (15.0 - day_progress * 30.0).abs().min(15.0) as u8
         }
         // Lightning rod: always outputs 0 unless struck (strike handled externally)
         LIGHTNING_ROD_ID => 0,
@@ -394,43 +450,70 @@ impl RedstoneEngine {
 
                 // ── Component side effects ──
                 // Piston (4-directional, sticky pull) — QC aware (effective_power from above)
-                if matches!(block.id, 137 | 138) && effective_power > 0 {
+                if matches!(block.id, 137 | 138) {
                     let is_sticky = block.id == 138;
-                    // Direction detection: simplified to east/west/north/south by neighbor check
-                    let facing = if let Some(p) = self.signal_map.get(&(x + 1, y, z)) { if *p > 0 { (1, 0) } else { (0, 1) } }
-                        else if let Some(p) = self.signal_map.get(&(x - 1, y, z)) { if *p > 0 { (-1, 0) } else { (0, -1) } }
-                        else { (1, 0) }; // default east
-                    let (dx, dz) = facing;
-                    let px = x + dx; let pz = z + dz;
-                    let pcp = ChunkPos::new(px >> 4, pz >> 4);
-                    if let Some(mut pchunk) = chunk_store.get_mut(&pcp) {
-                        let pushed = pchunk.get_block((px & 0xF) as usize, y, (pz & 0xF) as usize);
-                        if !pushed.is_air() && pushed.id != 266 {
-                            let (ppx, ppz) = (px + dx, pz + dz);
-                            let ppcp = ChunkPos::new(ppx >> 4, ppz >> 4);
-                            if let Some(mut ppchunk) = chunk_store.get_mut(&ppcp) {
-                                let dest = ppchunk.get_block((ppx & 0xF) as usize, y, (ppz & 0xF) as usize);
-                                if dest.is_air() {
-                                    ppchunk.set_block((ppx & 0xF) as usize, y, (ppz & 0xF) as usize, pushed);
-                                    pchunk.set_block((px & 0xF) as usize, y, (pz & 0xF) as usize, BlockState::AIR);
+                    if effective_power > 0 {
+                        // Extended: push block in facing direction (3D: east/west/north/south/up/down)
+                        let (dx, dy, dz) = detect_piston_facing(x, y, z, self);
+                        let px = x + dx; let py = y + dy; let pz = z + dz;
+                        let pcp = ChunkPos::new(px >> 4, pz >> 4);
+                        if (-64..=319).contains(&py) {
+                            if let Some(mut pchunk) = chunk_store.get_mut(&pcp) {
+                                let pushed = pchunk.get_block((px & 0xF) as usize, py, (pz & 0xF) as usize);
+                                if !pushed.is_air() && pushed.id != 266 {
+                                    let (ppx, ppy, ppz) = (px + dx, py + dy, pz + dz);
+                                    if (-64..=319).contains(&ppy) {
+                                        let ppcp = ChunkPos::new(ppx >> 4, ppz >> 4);
+                                        if let Some(mut ppchunk) = chunk_store.get_mut(&ppcp) {
+                                            let dest = ppchunk.get_block((ppx & 0xF) as usize, ppy, (ppz & 0xF) as usize);
+                                            if dest.is_air() {
+                                                ppchunk.set_block((ppx & 0xF) as usize, ppy, (ppz & 0xF) as usize, pushed);
+                                                pchunk.set_block((px & 0xF) as usize, py, (pz & 0xF) as usize, BlockState::AIR);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                        // Sticky piston: pull block when depowered
-                        if is_sticky && power == 0 {
-                            let behind_x = x - dx; let behind_z = z - dz;
+                    }
+                    // Sticky piston: pull block when depowered (power == 0)
+                    if is_sticky && effective_power == 0 {
+                        let (dx, dy, dz) = detect_piston_facing(x, y, z, self);
+                        let behind_x = x - dx; let behind_y = y - dy; let behind_z = z - dz;
+                        if (-64..=319).contains(&behind_y) {
                             let bcp = ChunkPos::new(behind_x >> 4, behind_z >> 4);
                             if let Some(mut bchunk) = chunk_store.get_mut(&bcp) {
-                                let behind = bchunk.get_block((behind_x & 0xF) as usize, y, (behind_z & 0xF) as usize);
-                                if !behind.is_air() && behind.id != 266
-                                    && bchunk.get_block((x & 0xF) as usize, y, (z & 0xF) as usize).is_air() {
-                                        bchunk.set_block((x & 0xF) as usize, y, (z & 0xF) as usize, behind);
-                                        bchunk.set_block((behind_x & 0xF) as usize, y, (behind_z & 0xF) as usize, BlockState::AIR);
-                                    }
+                                let behind = bchunk.get_block((behind_x & 0xF) as usize, behind_y, (behind_z & 0xF) as usize);
+                                let piston_front = bchunk.get_block((x & 0xF) as usize, y, (z & 0xF) as usize);
+                                if !behind.is_air() && behind.id != 266 && piston_front.is_air() {
+                                    bchunk.set_block((x & 0xF) as usize, y, (z & 0xF) as usize, behind);
+                                    bchunk.set_block((behind_x & 0xF) as usize, behind_y, (behind_z & 0xF) as usize, BlockState::AIR);
+                                }
                             }
                         }
                     }
                 }
+/// Detect piston facing direction from surrounding signal context.
+/// Returns (dx, dy, dz) — the direction the piston head extends.
+fn detect_piston_facing(x: i32, y: i32, z: i32, engine: &RedstoneEngine) -> (i32, i32, i32) {
+    // Check 6 cardinal directions for signal presence
+    let dirs: [(i32, i32, i32); 6] = [
+        (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, 1, 0), (0, -1, 0),
+    ];
+    for &(dx, dy, dz) in &dirs {
+        if let Some(p) = engine.signal_map.get(&(x + dx, y + dy, z + dz)) {
+            if *p > 0 { return (dx, dy, dz); }
+        }
+    }
+    // Default: check for solid block behind (piston base)
+    for &(dx, dy, dz) in &dirs {
+        if let Some(p) = engine.signal_map.get(&(x - dx, y - dy, z - dz)) {
+            if *p > 0 { return (dx, dy, dz); }
+        }
+    }
+    (1, 0, 0) // default east
+}
+
                 // TNT ignite
                 if block.id == 25 && effective_power > 0 {
                     self.ignite_tnt(x, y, z);

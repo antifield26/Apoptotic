@@ -28,8 +28,9 @@ pub struct RaidState {
 /// 袭击管理器
 pub struct RaidManager {
     pub active_raids: RwLock<HashMap<(i32, i32, i32), RaidState>>,
-    /// 村庄中心集合 (通过扫描门/村民预先计算)
     pub village_centers: RwLock<Vec<(i32, i32, i32)>>,
+    /// Recently completed raid centers (for advancement triggering)
+    pub completed_raids: RwLock<Vec<(i32, i32, i32)>>,
 }
 
 impl Default for RaidManager {
@@ -41,7 +42,13 @@ impl RaidManager {
         Self {
             active_raids: RwLock::new(HashMap::new()),
             village_centers: RwLock::new(Vec::new()),
+            completed_raids: RwLock::new(Vec::new()),
         }
+    }
+
+    /// Drain completed raid centers
+    pub fn take_completed_raids(&self) -> Vec<(i32, i32, i32)> {
+        std::mem::take(&mut *self.completed_raids.write())
     }
 
     /// 获取指定难度的袭击波次定义

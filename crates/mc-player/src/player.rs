@@ -201,6 +201,8 @@ pub struct PlayerManager {
     player_entities: RwLock<HashMap<u32, Uuid>>,
     banned: RwLock<HashSet<Uuid>>,
     whitelist: RwLock<(bool, HashSet<Uuid>)>,
+    /// Spatial index: chunk → player UUIDs (for O(1) proximity queries)
+    chunk_players: DashMap<(i32, i32), Vec<Uuid>>,
 }
 
 impl Default for PlayerManager {
@@ -220,6 +222,7 @@ impl PlayerManager {
             chat_tx,
             entity_tx,
             player_state_tx,
+            chunk_players: DashMap::new(),
             player_entities: RwLock::new(HashMap::new()),
             banned: RwLock::new(HashSet::new()),
             whitelist: RwLock::new((false, HashSet::new())),
@@ -279,6 +282,9 @@ impl PlayerManager {
 
         let name = player.username.clone();
         self.players.insert(uuid, player.clone());
+        // Init spatial index
+        let px = player.position.x; let pz = player.position.z;
+        self.init_player_chunk(&uuid, (px.floor() as i32).div_euclid(16), (pz.floor() as i32).div_euclid(16));
 
         tracing::info!(
             "Player '{}' joined (entity_id={}, uuid={}) — {} online",
@@ -293,6 +299,12 @@ impl PlayerManager {
 
     /// 玩家离开
     pub fn remove_player(&self, uuid: &Uuid) -> Option<Player> {
+        // Clean up spatial index before removing
+        if let Some(ref p) = self.players.get(uuid) {
+            let cx = (p.position.x.floor() as i32).div_euclid(16);
+            let cz = (p.position.z.floor() as i32).div_euclid(16);
+            self.remove_player_chunk(uuid, cx, cz);
+        }
         let removed = self.players.remove(uuid).map(|(_, v)| v);
         if let Some(ref p) = removed {
             tracing::info!(
@@ -507,18 +519,55 @@ impl PlayerManager {
     }
 
     /// 获取指定位置范围内的所有玩家 (用于距离裁剪广播)
+    /// Spatial-indexed proximity query: only checks players in nearby chunks.
+    /// Reduces O(P×E) to O(E×C) where C = players in adjacent chunks.
     pub fn players_in_range(&self, x: f64, y: f64, z: f64, radius: f64) -> Vec<(Uuid, f64)> {
         let r2 = radius * radius;
-        self.players
-            .iter()
-            .filter_map(|r| {
-                let dx = r.position.x - x;
-                let dy = r.position.y - y;
-                let dz = r.position.z - z;
-                let d2 = dx*dx + dy*dy + dz*dz;
-                if d2 <= r2 { Some((r.uuid, d2)) } else { None }
-            })
-            .collect()
+        let cx = (x.floor() as i32).div_euclid(16);
+        let cz = (z.floor() as i32).div_euclid(16);
+        let chunk_radius = ((radius / 16.0).ceil() as i32).max(1);
+        let mut results = Vec::new();
+        for dcx in -chunk_radius..=chunk_radius {
+            for dcz in -chunk_radius..=chunk_radius {
+                let key = (cx + dcx, cz + dcz);
+                if let Some(uuids) = self.chunk_players.get(&key) {
+                    for uuid in uuids.iter() {
+                        if let Some(ref player) = self.players.get(uuid) {
+                            let dx = player.position.x - x;
+                            let dy = player.position.y - y;
+                            let dz = player.position.z - z;
+                            let d2 = dx*dx + dy*dy + dz*dz;
+                            if d2 <= r2 {
+                                results.push((*uuid, d2));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        results
+    }
+
+    /// Update spatial index when a player moves to a new chunk
+    pub fn update_player_chunk(&self, uuid: &Uuid, old_cx: i32, old_cz: i32, new_cx: i32, new_cz: i32) {
+        // Remove from old chunk
+        if let Some(mut list) = self.chunk_players.get_mut(&(old_cx, old_cz)) {
+            list.retain(|u| u != uuid);
+        }
+        // Add to new chunk
+        self.chunk_players.entry((new_cx, new_cz)).or_default().push(*uuid);
+    }
+
+    /// Initialize player in spatial index (call on join)
+    pub fn init_player_chunk(&self, uuid: &Uuid, cx: i32, cz: i32) {
+        self.chunk_players.entry((cx, cz)).or_default().push(*uuid);
+    }
+
+    /// Remove player from spatial index (call on leave)
+    pub fn remove_player_chunk(&self, uuid: &Uuid, cx: i32, cz: i32) {
+        if let Some(mut list) = self.chunk_players.get_mut(&(cx, cz)) {
+            list.retain(|u| u != uuid);
+        }
     }
 
     /// 获取实体 ID (用于发送定向包)
@@ -1296,6 +1345,33 @@ impl PlayerManager {
         }
     }
 
+    /// Get the enchantment level on the player's boots for a given enchant name.
+    /// Returns 0 if no boots or enchant not present.
+    pub fn get_boots_enchant(&self, uuid: &Uuid, enchant_name: &str) -> u8 {
+        self.players.get(uuid).and_then(|p| {
+            p.inventory.armor.get(0).and_then(|opt| opt.as_ref())
+                .and_then(|stack| stack.nbt.as_ref())
+                .map(|nbt| crate::enchant::enchant_level(&Some(nbt.clone()), enchant_name))
+        }).unwrap_or(0)
+    }
+
+    /// Compute movement modifier from boot enchantments.
+    /// Returns (frost_walker_level, soul_speed_level, swift_sneak_level).
+    pub fn get_boot_enchant_levels(&self, uuid: &Uuid) -> (u8, u8, u8) {
+        self.players.get(uuid).and_then(|p| {
+            p.inventory.armor.get(0).and_then(|opt| opt.as_ref())
+                .and_then(|stack| stack.nbt.as_ref())
+                .map(|nbt| {
+                    let nbt_opt = Some(nbt.clone());
+                    (
+                        crate::enchant::enchant_level(&nbt_opt, "frost_walker"),
+                        crate::enchant::enchant_level(&nbt_opt, "soul_speed"),
+                        crate::enchant::enchant_level(&nbt_opt, "swift_sneak"),
+                    )
+                })
+        }).unwrap_or((0, 0, 0))
+    }
+
     /// 获取玩家当前手持物品
     pub fn get_held_item(&self, uuid: &Uuid) -> Option<ItemStack> {
         self.players.get(uuid).and_then(|p| {
@@ -1403,6 +1479,32 @@ impl PlayerManager {
                 p.fall_distance = 0.0; // reset fall distance on landing/stop
             }
         }
+    }
+
+    /// Set player speed multiplier (enchantment-based, resets each tick)
+    pub fn set_speed_multiplier(&self, uuid: &Uuid, mult: f32) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.speed_multiplier = mult;
+        }
+    }
+
+    /// Apply durability damage to boots (for Soul Speed, Frost Walker)
+    pub fn damage_boots(&self, uuid: &Uuid, amount: u16) -> bool {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            if let Some(ref mut stack) = p.inventory.armor.get_mut(0).and_then(|opt| opt.as_mut()) {
+                if stack.durability.is_some() {
+                    let current = stack.durability.unwrap_or(0);
+                    if current <= amount {
+                        // Boots break
+                        p.inventory.armor[0] = None;
+                        return true; // broken
+                    }
+                    stack.durability = Some(current - amount);
+                }
+                return false;
+            }
+        }
+        false
     }
 
     /// Set pending teleport ID for TeleportConfirm validation

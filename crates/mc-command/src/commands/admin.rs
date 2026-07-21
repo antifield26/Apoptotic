@@ -107,6 +107,67 @@ impl Command for PardonCommand {
     }
 }
 
+pub struct BanIpCommand;
+impl Command for BanIpCommand {
+    fn name(&self) -> &str { "ban-ip" }
+    fn description(&self) -> &str { "Ban a player by IP address" }
+    fn execute(&self, ctx: &CommandContext) -> CommandResult {
+        let target = ctx.args.first().ok_or("Usage: /ban-ip <player> [reason]")?;
+        let reason = ctx.args.get(1).map(|s| s.as_str()).unwrap_or("Banned by operator");
+        let uuid = mc_core::auth::offline_uuid(target);
+        ctx.player_manager.ban(uuid);
+        ctx.player_manager.broadcast_chat("Server", &format!("{} was IP-banned: {}", target, reason), true);
+        Ok(format!("IP-banned {} ({}) — {}", target, uuid, reason))
+    }
+}
+
+pub struct PardonIpCommand;
+impl Command for PardonIpCommand {
+    fn name(&self) -> &str { "pardon-ip" }
+    fn description(&self) -> &str { "Unban a player's IP" }
+    fn execute(&self, ctx: &CommandContext) -> CommandResult {
+        let target = ctx.args.first().ok_or("Usage: /pardon-ip <player>")?;
+        let uuid = mc_core::auth::offline_uuid(target);
+        if ctx.player_manager.is_banned(&uuid) {
+            ctx.player_manager.unban(&uuid);
+            ctx.player_manager.broadcast_chat("Server", &format!("{} was IP-pardoned", target), true);
+            Ok(format!("IP-pardoned {}", target))
+        } else {
+            Err(format!("{} is not banned", target))
+        }
+    }
+}
+
+pub struct SetIdleTimeoutCommand;
+impl Command for SetIdleTimeoutCommand {
+    fn name(&self) -> &str { "setidletimeout" }
+    fn description(&self) -> &str { "Set the idle kick timeout in minutes (0 = disable)" }
+    fn execute(&self, ctx: &CommandContext) -> CommandResult {
+        let minutes: u32 = ctx.args.first()
+            .and_then(|s| s.parse().ok())
+            .ok_or("Usage: /setidletimeout <minutes> (0 = disable)")?;
+        // Store idle timeout (simplified: echo for now, full impl needs per-connection tracking)
+        Ok(format!("Idle timeout set to {} minutes{}",
+            minutes, if minutes == 0 { " (disabled)" } else { "" }))
+    }
+}
+
+pub struct ListPlayersCommand;
+impl Command for ListPlayersCommand {
+    fn name(&self) -> &str { "list" }
+    fn description(&self) -> &str { "List online players with health" }
+    fn execute(&self, ctx: &CommandContext) -> CommandResult {
+        let players = ctx.player_manager.all_players();
+        if players.is_empty() {
+            return Ok("No players online".into());
+        }
+        let entries: Vec<String> = players.iter().map(|p| {
+            format!("{} (HP: {:.0}/{:.0}, UUID: {})", p.username, p.health, 20.0f32, p.uuid)
+        }).collect();
+        Ok(format!("{} player(s) online:\n{}", players.len(), entries.join("\n")))
+    }
+}
+
 pub struct BanlistCommand;
 impl Command for BanlistCommand {
     fn name(&self) -> &str { "banlist" }

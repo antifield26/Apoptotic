@@ -63,6 +63,10 @@ fn register_commands(dispatcher: &mut CommandDispatcher) {
     dispatcher.register(KickCommand);
     dispatcher.register(BanCommand);
     dispatcher.register(PardonCommand);
+    dispatcher.register(BanIpCommand);
+    dispatcher.register(PardonIpCommand);
+    dispatcher.register(SetIdleTimeoutCommand);
+    dispatcher.register(ListPlayersCommand);
     dispatcher.register(BanlistCommand);
     dispatcher.register(WhitelistCommand);
     dispatcher.register(SaveAllCommand);
@@ -84,7 +88,7 @@ fn register_commands(dispatcher: &mut CommandDispatcher) {
     dispatcher.register(WeatherCommand);
     dispatcher.register(DifficultyCommand);
     dispatcher.register(TickCommand);
-    dispatcher.register(ListCommand);
+    dispatcher.register(ListPlayersCommand);
     dispatcher.register(SeedCommand);
     dispatcher.register(SayCommand);
     dispatcher.register(StatusCommand);

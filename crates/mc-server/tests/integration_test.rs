@@ -166,7 +166,7 @@ fn test_mob_manager_register_remove() {
         is_baby: false,
         in_love_ticks: 0,
         breed_cooldown: 0,
-        is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+        is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
     };
     mm.register(mob);
     assert!(mm.get(100).is_some());
@@ -198,7 +198,7 @@ fn test_mob_manager_damage() {
         is_baby: false,
         in_love_ticks: 0,
         breed_cooldown: 0,
-        is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+        is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
     };
     mm.register(mob);
     let remaining = mm.damage(200, 10.0);

@@ -330,6 +330,7 @@ fn make_tracked_mob(eid: i32, mob_type: i32, x: f64, y: f64, z: f64) -> mc_playe
         is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false,
         is_on_fire: false, is_in_water: false,
         path: Vec::new(), path_last_tick: 0,
+        sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
     }
 }
 
@@ -685,4 +686,91 @@ pub fn tick_mob_pathfinding(
             mob_mgr.set_path(*eid, path, tick_count);
         }
     })
+}
+
+// ═══ 26.2: Wandering Trader spawning (every 24000 ticks = 1 MC day) ═══
+
+/// Attempt to spawn a Wandering Trader near a random player.
+/// Returns list of (entity_id, mob_type, x, y, z) for spawned entities.
+pub fn tick_wandering_trader(
+    tick_count: u64, pm: &SharedPlayerManager,
+    mob_mgr: &Arc<mc_player::mob::MobManager>,
+    next_eid: &Arc<std::sync::atomic::AtomicI32>,
+    cs: &ChunkStore,
+) -> Vec<(i32, i32, f64, f64, f64)> {
+    // First spawn at 24000, then every 48000 ticks (2 MC days)
+    if tick_count < 24000 || (tick_count - 24000) % 48000 != 0 {
+        return Vec::new();
+    }
+    // Check current trader count (max 1 at a time)
+    let trader_count = mob_mgr.all_mobs().iter()
+        .filter(|m| m.mob_type == mc_core::constants::entity_type::WANDERING_TRADER)
+        .count();
+    if trader_count >= 1 { return Vec::new(); }
+
+    let players = pm.all_players();
+    if players.is_empty() { return Vec::new(); }
+    let player = &players[fastrand::usize(0..players.len())];
+    let angle = fastrand::f64() * std::f64::consts::TAU;
+    let dist = 16.0 + fastrand::f64() * 24.0;
+    let sx = player.position.x + angle.cos() * dist;
+    let sz = player.position.z + angle.sin() * dist;
+    let sy = {
+        let cp = mc_core::position::ChunkPos::new((sx as i32) >> 4, (sz as i32) >> 4);
+        cs.get(&cp).map(|ch| {
+            let lx = (sx as i32 & 0xF) as usize; let lz = (sz as i32 & 0xF) as usize;
+            (0..=255).rev().find(|&y| ch.get_block(lx, y, lz).id != 0).unwrap_or(64) as f64 + 1.0
+        }).unwrap_or(64.0)
+    };
+
+    let mut spawned = Vec::new();
+    // Spawn Wandering Trader
+    let trader_eid = next_eid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let trader = make_tracked_mob(trader_eid, mc_core::constants::entity_type::WANDERING_TRADER, sx, sy, sz);
+    mob_mgr.register(trader);
+    spawned.push((trader_eid, mc_core::constants::entity_type::WANDERING_TRADER, sx, sy, sz));
+
+    // Spawn 1-2 Trader Llamas
+    let llama_count = 1 + (fastrand::u32(..) % 2) as usize;
+    for _ in 0..llama_count {
+        let llama_eid = next_eid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let lx = sx + (fastrand::f64() - 0.5) * 3.0;
+        let lz = sz + (fastrand::f64() - 0.5) * 3.0;
+        let llama = make_tracked_mob(llama_eid, mc_core::constants::entity_type::TRADER_LLAMA, lx, sy, lz);
+        mob_mgr.register(llama);
+        spawned.push((llama_eid, mc_core::constants::entity_type::TRADER_LLAMA, lx, sy, lz));
+    }
+    spawned
+}
+
+/// Wandering Trader trade offers (6 random trades from pool)
+pub fn wandering_trader_trades() -> Vec<(u32, u8, u32, u8, i32, i32)> {
+    // (input_item, input_count, output_item, output_count, max_uses, xp)
+    let pool: &[(u32, u8, u32, u8, i32, i32)] = &[
+        (134, 1, 78, 3, 12, 1),    // emerald → ice
+        (134, 2, 79, 1, 12, 1),    // emerald → packed_ice
+        (134, 1, 37, 8, 16, 1),    // emerald → fern
+        (134, 1, 47, 1, 12, 1),    // emerald → blue_ice
+        (134, 3, 834, 1, 8, 1),    // emerald → nautilus_shell
+        (134, 1, 177, 3, 12, 1),   // emerald → podzol
+        (134, 1, 174, 3, 16, 1),   // emerald → packed_mud
+        (134, 1, 65, 1, 12, 1),    // emerald → cactus
+        (134, 1, 139, 1, 8, 1),    // emerald → sand
+        (134, 1, 966, 2, 5, 1),    // emerald → lead
+        (134, 1, 1048, 1, 8, 1),   // emerald → glow_lichen
+        (134, 1, 897, 1, 8, 1),    // emerald → slimeball
+        (134, 5, 828, 1, 8, 1),    // emerald → heart_of_the_sea
+        (134, 1, 168, 2, 16, 1),   // emerald → moss_block
+        (134, 1, 1055, 1, 12, 1),  // emerald → frosted_ice
+    ];
+    let mut rng = fastrand::Rng::new();
+    let mut selected: Vec<(u32, u8, u32, u8, i32, i32)> = Vec::with_capacity(6);
+    let mut indices: Vec<usize> = (0..pool.len()).collect();
+    // Pick up to 6 random unique trades
+    for _ in 0..6.min(pool.len()) {
+        let idx = rng.usize(0..indices.len());
+        selected.push(pool[indices[idx]]);
+        indices.remove(idx);
+    }
+    selected
 }

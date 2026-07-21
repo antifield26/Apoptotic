@@ -16,6 +16,57 @@ const FALLING_BLOCKS: &[u32] = &[
     590, 591, 592, 593, 594, 595, 596, 597, // concrete powder (cyan→black)
 ];
 
+/// 26.2 Sulfur Spike block ID
+const SULFUR_SPIKE_ID: u32 = 1251;
+
+/// Tick Sulfur Spike physics: stalactites detach and fall.
+/// Returns list of (x, y, z) positions where spikes fell, for applying damage.
+pub fn tick_sulfur_spikes(chunk_store: &ChunkStore) -> Vec<(i32, i32, i32)> {
+    let mut fallen = Vec::new();
+    let all = chunk_store.all_chunks();
+    for (cp, chunk) in &all {
+        let cx = cp.x; let cz = cp.z;
+        // Only check underground y range (Sulfur Caves region)
+        for y in -32..64 {
+            for lx in 0..16 {
+                for lz in 0..16 {
+                    if chunk.get_block(lx, y, lz).id != SULFUR_SPIKE_ID {
+                        continue;
+                    }
+                    let wx = cx * 16 + lx as i32;
+                    let wz = cz * 16 + lz as i32;
+                    // Check if spike is hanging from ceiling: solid block above, air below
+                    let above = get_block_id_at(chunk_store, wx, y + 1, wz);
+                    let below = get_block_id_at(chunk_store, wx, y - 1, wz);
+                    // Ceiling spike: solid above, air below → can detach
+                    let is_ceiling = above != 0 && above != SULFUR_SPIKE_ID && below == 0;
+                    // Floor spike: solid below, air above → stable (stalagmite)
+                    let _is_floor = below != 0 && below != SULFUR_SPIKE_ID && above == 0;
+                    // Detach ceiling spikes randomly (simulates instability)
+                    if is_ceiling && fastrand::f64() < 0.02 {
+                        // Remove the spike block
+                        if let Some(mut ch) = chunk_store.get_mut(&cp) {
+                            ch.set_block(lx, y, lz, mc_core::block::BlockState::AIR);
+                        }
+                        fallen.push((wx, y, wz));
+                    }
+                }
+            }
+        }
+    }
+    fallen
+}
+
+fn get_block_id_at(chunk_store: &ChunkStore, wx: i32, wy: i32, wz: i32) -> u32 {
+    if !(-64..=319).contains(&wy) { return 0; }
+    let cp = ChunkPos::new(wx >> 4, wz >> 4);
+    if let Some(chunk) = chunk_store.get(&cp) {
+        chunk.get_block((wx & 0xF) as usize, wy, (wz & 0xF) as usize).id
+    } else {
+        0
+    }
+}
+
 /// 可燃方块 (火可以蔓延到)
 const FLAMMABLE_BLOCKS: &[u32] = &[
     2, 3,                      // grass, dirt

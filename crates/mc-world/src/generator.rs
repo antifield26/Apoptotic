@@ -1309,6 +1309,74 @@ fn get_cave_hasher(seed: u64) -> noise::permutationtable::PermutationTable {
     })
 }
 
+// ═══ 26.2 Chaos Cubed: Sulfur Springs surface structure ═══
+
+/// Place Sulfur Springs on the surface above Sulfur Caves biomes.
+/// Generates in 4 size variants: Small (3x3), Medium (5x5), Large (7x7), Extra Large (9x9).
+fn place_sulfur_springs(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: &dyn Fn(i32, i32) -> i32) {
+    // Sulfur Springs only generate on the surface above Sulfur Caves
+    let cx = pos.x * 16; let cz = pos.z * 16;
+    let sulfur = BlockState::new(1240);       // sulfur_block
+    let potent = BlockState::new(1252);        // potent_sulfur
+    let magma = BlockState::new(213);          // magma_block
+    let water = BlockState::new(267);          // water
+
+    // Use deterministic check based on position to decide if spring generates here
+    let hash = (cx as u64).wrapping_mul(0x9E3779B9).wrapping_add((cz as u64).wrapping_mul(0x517CC1B7)).wrapping_add(seed);
+    if hash % 27 != 0 { return; } // ~3.7% chance per chunk
+
+    // Determine center position and size variant
+    let variant = (hash >> 4) % 4; // 0=Small, 1=Medium, 2=Large, 3=Extra Large
+    let (radius, _potent_count, _magma_count) = match variant {
+        0 => (1, 1, 2),   // Small: 3x3
+        1 => (2, 2, 3),   // Medium: 5x5
+        2 => (3, 4, 5),   // Large: 7x7
+        _ => (4, 6, 7),   // Extra Large: 9x9
+    };
+
+    let center_x = ((cx as u64).wrapping_mul(0x45D9F3B3335B369) % 16) as usize;
+    let center_z = ((cz as u64).wrapping_mul(0x6C0789655B9D4F1) % 16) as usize;
+    let surface_y = height_fn(cx + center_x as i32, cz + center_z as i32);
+
+    // Don't place below water level
+    if surface_y < 63 { return; }
+
+    // Place the spring: ring of sulfur blocks with potent sulfur and magma inside
+    for dx in -radius..=radius {
+        for dz in -radius..=radius {
+            let lx = (center_x as i32 + dx) as usize;
+            let lz = (center_z as i32 + dz) as usize;
+            if lx >= 16 || lz >= 16 { continue; }
+            let dist = ((dx*dx + dz*dz) as f64).sqrt();
+
+            // Only place on surface level
+            let wy = surface_y;
+            if !(0..=255).contains(&wy) { continue; }
+
+            let block = if dist <= radius as f64 * 0.4 {
+                // Center: Potent Sulfur (creates the spring pool)
+                potent
+            } else if dist <= radius as f64 * 0.7 {
+                // Inner ring: Water over Potent Sulfur mix
+                if (dx + dz) % 3 == 0 { potent } else { water }
+            } else if dist <= radius as f64 * 1.0 {
+                // Outer ring: Sulfur blocks + occasional magma
+                if (dx.abs() + dz.abs()) % 4 == 0 { magma } else { sulfur }
+            } else {
+                continue;
+            };
+
+            // Replace existing block if it's grass/dirt/stone (surface blocks)
+            let existing = chunk.get_block(lx, wy, lz);
+            if existing.is_air() || existing.id == 0
+                || matches!(existing.id, 1|2|3|8|9|10|11) // stone/dirt/grass variants
+            {
+                chunk.set_block(lx, wy, lz, block);
+            }
+        }
+    }
+}
+
 /// Perlin 噪声地形生成器 (使用 noise crate — 3D Perlin + 分形)
 /// PermutationTable 通过线程局部缓存复用
 pub struct NoiseGenerator {
@@ -1415,6 +1483,7 @@ impl TerrainGenerator for NoiseGenerator {
         place_ocean_monument(&mut chunk, pos, seed);
         place_trial_chambers(&mut chunk, pos, seed);
         place_ancient_city(&mut chunk, pos, seed);
+        place_sulfur_springs(&mut chunk, pos, seed, &|wx, wz| self.height_at(wx, wz, &terrain_hasher));
 
         for section in chunk.sections.iter_mut().flatten() {
             fill_section_biomes(&mut section.biomes, section.position.y, pos.x, pos.z, seed);

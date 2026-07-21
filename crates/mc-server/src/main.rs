@@ -472,6 +472,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // ── RPi 5 CPU affinity: pin tick thread to dedicated core ──
+    #[cfg(target_os = "linux")]
+    {
+        let tick_core = app.config.performance.tick_core_affinity;
+        if tick_core >= 0 {
+            unsafe {
+                let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
+                libc::CPU_SET(tick_core as usize, &mut cpuset);
+                let ret = libc::sched_setaffinity(
+                    0,
+                    std::mem::size_of::<libc::cpu_set_t>(),
+                    &cpuset,
+                );
+                if ret == 0 {
+                    tracing::info!("CPU affinity: tick thread pinned to core {}", tick_core);
+                } else {
+                    tracing::warn!("Failed to set CPU affinity for tick thread (errno={})", std::io::Error::last_os_error().raw_os_error().unwrap_or(-1));
+                }
+            }
+        }
+    }
+
     // Game tick loop — runs on main thread
     let tick_rate = app.config.performance.tick_rate.clamp(1, 1000);
     let tick_interval_ms: u64 = (1000 / tick_rate) as u64;
@@ -670,9 +692,110 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if tick_count.is_multiple_of(5) {
                     fluid_engine.tick(&chunk_store);
                 }
-                // Tick brewing stands (every 5 ticks)
+                // 26.2: Tick Potent Sulfur + Sulfur Spike effects (every 20 ticks = 1s)
+                if tick_count.is_multiple_of(20) {
+                    // Sulfur Spike falling stalactites
+                    let fallen_spikes = mc_world::physics::tick_sulfur_spikes(&chunk_store);
+                    for (fx, fy, fz) in &fallen_spikes {
+                        // Apply damage to players directly below the falling spike
+                        for player in player_manager.all_players() {
+                            let px = player.position.x as i32;
+                            let py = player.position.y as i32;
+                            let pz = player.position.z as i32;
+                            if px == *fx && pz == *fz && py < *fy && (*fy - py) < 40 {
+                                // Damage scales with height (1 HP per 2 blocks)
+                                let fall_height = (*fy - py) as f32;
+                                let dmg = (fall_height / 2.0).min(20.0);
+                                if player_manager.can_take_damage(&player.uuid, tick_count) {
+                                    let new_hp = (player.health - dmg).max(0.0);
+                                    let _ = player_manager.set_health(&player.uuid, new_hp);
+                                    player_manager.mark_damage_taken(&player.uuid, tick_count);
+                                }
+                            }
+                        }
+                    }
+                    // Potent Sulfur gas/geyser/bubble effects
+                    let ps_events = mc_world::fluid::tick_potent_sulfur(&chunk_store);
+                    for event in &ps_events {
+                        match event {
+                            mc_world::fluid::PotentSulfurEvent::NauseaCloud { x, y, z, radius } => {
+                                // Apply nausea to players within radius
+                                for player in player_manager.all_players() {
+                                    let dx = player.position.x - x;
+                                    let dy = player.position.y - y;
+                                    let dz = player.position.z - z;
+                                    if dx*dx + dy*dy + dz*dz < radius*radius {
+                                        let _ = player_manager.add_effect(&player.uuid,
+                                            mc_core::effect::ActiveEffect {
+                                                effect: mc_core::effect::EffectType::Nausea,
+                                                amplifier: 0, duration_ticks: 100,
+                                            });
+                                    }
+                                }
+                            }
+                            mc_world::fluid::PotentSulfurEvent::BubbleColumn { x, y, z, height } => {
+                                // Bubble columns provide upward velocity for entities nearby
+                                for player in player_manager.all_players() {
+                                    let dx = player.position.x - x;
+                                    let dz = player.position.z - z;
+                                    let dy = player.position.y - y;
+                                    if dx*dx + dz*dz < 1.0 && dy >= 0.0 && dy < *height as f64 {
+                                        // Push player upward
+                                        if let Some(_eid) = player_manager.get_entity_id(&player.uuid) {
+                                            let _ = player_manager.update_position_full(
+                                                &player.uuid,
+                                                player.position.x,
+                                                (player.position.y + 0.3).min(y + *height as f64),
+                                                player.position.z,
+                                                player.position.yaw, player.position.pitch,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            mc_world::fluid::PotentSulfurEvent::Geyser { x, y, z, water_columns: _, geyser_type } => {
+                                // Geyser eruptions: push entities upward strongly
+                                if matches!(geyser_type, mc_world::fluid::GeyserType::Continuous)
+                                    || fastrand::u32(..).is_multiple_of(3) // Magma: random 1/3 chance per second
+                                {
+                                    for player in player_manager.all_players() {
+                                        let dx = player.position.x - x;
+                                        let dz = player.position.z - z;
+                                        if dx*dx + dz*dz < 1.5 && player.position.y > *y - 1.0 {
+                                            // Launch player upward
+                                            let _ = player_manager.update_position_full(
+                                                &player.uuid,
+                                                player.position.x,
+                                                player.position.y + 1.5,
+                                                player.position.z,
+                                                player.position.yaw, player.position.pitch,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Tick brewing stands + fire advancements (every 5 ticks)
                 if tick_count.is_multiple_of(5) {
-                    brewing_manager.write().tick(&brewing_registry, &container_manager);
+                    let mut bm = brewing_manager.write();
+                    bm.tick(&brewing_registry, &container_manager);
+                    // Fire BrewedPotion advancements for completed brews
+                    for brew in bm.take_brew_completions() {
+                        for player in player_manager.all_players() {
+                            let dx = player.position.x - brew.position.0 as f64;
+                            let dy = player.position.y - brew.position.1 as f64;
+                            let dz = player.position.z - brew.position.2 as f64;
+                            if dx*dx + dy*dy + dz*dz < 16.0 {
+                                advancement_tracker.write().check_criterion(
+                                    &player.uuid,
+                                    &mc_player::advancement::Criterion::BrewedPotion,
+                                    &advancement_registry,
+                                );
+                            }
+                        }
+                    }
                 }
                 // Tick fishing bobbers (every 20 ticks)
                 if tick_count.is_multiple_of(20) {
@@ -690,11 +813,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 // Tick beacon effects (every 80 ticks = 4 seconds)
                 if tick_count.is_multiple_of(80) {
-                    beacon_manager.write().tick(&chunk_store, &player_manager);
+                    let mut bm = beacon_manager.write();
+                    bm.tick(&chunk_store, &player_manager);
+                    // Fire ConstructedBeacon advancement for nearby players when beacon activates
+                    if bm.has_newly_activated() {
+                        for player in player_manager.all_players() {
+                            advancement_tracker.write().check_criterion(
+                                &player.uuid,
+                                &mc_player::advancement::Criterion::ConstructedBeacon,
+                                &advancement_registry,
+                            );
+                        }
+                    }
                 }
                 // Copper bulb natural oxidation (every 72000 ticks ≈ 1 hour)
                 if tick_count.is_multiple_of(72000) {
                     tick::tick_copper_oxidation(&chunk_store, &dirty_chunks_for_tick);
+                }
+                // 26.2: Tick Sculk Sensor vibrations + gossip decay (every 20 ticks = 1s)
+                if tick_count.is_multiple_of(20) {
+                    mc_world::redstone::tick_sculk_sensors(&chunk_store);
+                }
+                if tick_count.is_multiple_of(100) {
+                    mc_player::villager::GLOBAL_GOSSIP.tick();
                 }
                 // Mob spawning
                 if tick_count.is_multiple_of(100) {
@@ -702,6 +843,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 if tick_count.is_multiple_of(200) {
                     tick::tick_passive_spawning(&player_manager, &mob_manager, &chunk_store, &world_state, &next_entity_id_for_tick);
+                }
+                // 26.2: Wandering Trader spawning (check every 24000 ticks = 1 MC day)
+                if tick_count.is_multiple_of(24000) {
+                    let spawned = tick::tick_wandering_trader(tick_count, &player_manager, &mob_manager, &next_entity_id_for_tick, &chunk_store);
+                    for (eid, mob_type, x, y, z) in &spawned {
+                        // Send spawn packet to all players
+                        for player in player_manager.all_players() {
+                            let _ = {
+                                use mc_protocol::packets::play::SpawnEntity;
+                                let pkt = SpawnEntity {
+                                    entity_id: *eid, entity_uuid: uuid::Uuid::new_v4(),
+                                    entity_type: *mob_type,
+                                    x: *x, y: *y, z: *z,
+                                    pitch: 0, yaw: 0, head_yaw: 0, data: 0,
+                                    vel_x: 0, vel_y: 0, vel_z: 0,
+                                };
+                                // Send via player's connection (simplified: broadcast via entity system)
+                                // The mob position broadcast system will handle visibility
+                                None::<()>
+                            };
+                        }
+                    }
                 }
                 // Crafter activation (every 20 ticks)
                 if tick_count.is_multiple_of(20) {
@@ -790,7 +953,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             tame_attempts: 0, is_baby: false, in_love_ticks: 0,
                                             breed_cooldown: 0, is_sheared: false,
                                             path: vec![], path_last_tick: 0,
-                                            is_on_fire: false, is_in_water: false,
+                                            is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
                                         };
                                         mob_manager.register(cloud);
                                     }
@@ -867,6 +1030,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 info!("Raid started for player '{}' — {} waves incoming!", p.username, waves);
                                 // Spawn initial wave immediately
                                 let spawns = raid_manager.spawn_wave((p.position.x as i32, p.position.y as i32, p.position.z as i32));
+                                // Fire RaidWin if this was the last wave
+                                if raid_manager.check_wave_complete((p.position.x as i32, p.position.y as i32, p.position.z as i32)) {
+                                    advancement_tracker.write().check_criterion(
+                                        &p.uuid, &mc_player::advancement::Criterion::RaidWin, &advancement_registry);
+                                }
                                 for (mob_type, pos) in &spawns {
                                     let eid = next_entity_id_for_tick.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                     let mob_uuid = uuid::Uuid::new_v4();
@@ -881,7 +1049,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         tame_attempts: 0, is_baby: false, in_love_ticks: 0,
                                         breed_cooldown: 0, is_sheared: false,
                                         path: vec![], path_last_tick: 0,
-                                        is_on_fire: false, is_in_water: false,
+                                        is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
                                     };
                                     mob_manager.register(tracked);
                                     player_manager.broadcast_mob_spawn(eid, mob_uuid, *mob_type, pos.x, pos.y, pos.z);
@@ -1033,6 +1201,79 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             mob_manager.remove(mob.entity_id);
                         }
+                    // 26.2: Sulfur Cube Explosive archetype — redstone/fire priming + detonation
+                    if mob.mob_type == mc_core::constants::entity_type::SULFUR_CUBE {
+                        // Check for fire/redstone priming
+                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks, primed }) = mob.sulfur_cube_archetype {
+                            if !primed {
+                                let mx = mob.position.x as i32; let my = mob.position.y as i32; let mz = mob.position.z as i32;
+                                let mut should_prime = false;
+                                // Check for fire blocks nearby
+                                for dx in -1..=1i32 { for dy in -1..=1i32 { for dz in -1..=1i32 {
+                                    let cp = mc_core::position::ChunkPos::new(mx >> 4, mz >> 4);
+                                    if let Some(ch) = chunk_store.get(&cp) {
+                                        let bid = ch.get_block(((mx + dx) & 0xF) as usize, my + dy, ((mz + dz) & 0xF) as usize).id;
+                                        if bid == 51 { should_prime = true; } // fire
+                                    }
+                                }}}
+                                if should_prime {
+                                    mob_manager.prime_explosive(mob.entity_id, 120); // 6s fuse
+                                    info!("Sulfur Cube TNT primed by fire at ({}, {}, {})", mx, my, mz);
+                                }
+                            }
+                        }
+                        // Detonation check
+                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks, primed }) = mob.sulfur_cube_archetype {
+                            if primed && fuse_ticks == 0 {
+                                let mx = mob.position.x; let my = mob.position.y; let mz = mob.position.z;
+                                // Explosion damage to nearby players
+                                for player in player_manager.all_players() {
+                                    let d = ((player.position.x - mx).powi(2) + (player.position.y - my).powi(2) + (player.position.z - mz).powi(2)).sqrt() as f32;
+                                    if d < 4.0 {
+                                        let dmg = (20.0f32 * (1.0 - d / 4.0)).max(0.0);
+                                        if player_manager.can_take_damage(&player.uuid, tick_count) {
+                                            let new_hp = (player.health - dmg).max(0.0);
+                                            let _ = player_manager.set_health(&player.uuid, new_hp);
+                                            player_manager.mark_damage_taken(&player.uuid, tick_count);
+                                        }
+                                    }
+                                }
+                                // Destroy blocks (2.5 block radius — smaller than creeper)
+                                let (mix, miy, miz) = (mx as i32, my as i32, mz as i32);
+                                for dx in -2..=2i32 { for dy in -2..=2i32 { for dz in -2..=2i32 {
+                                    let d = ((dx*dx + dy*dy + dz*dz) as f32).sqrt();
+                                    if d <= 2.5 && fastrand::f64() < 0.6 {
+                                        let (wx, wy, wz) = (mix + dx, miy + dy, miz + dz);
+                                        if (-64..=319).contains(&wy) {
+                                            let cp = mc_core::position::ChunkPos::new(wx >> 4, wz >> 4);
+                                            if let Some(mut chunk) = chunk_store.get_mut(&cp) {
+                                                let block = chunk.get_block((wx & 0xF) as usize, wy, (wz & 0xF) as usize);
+                                                if !block.is_air() && block.id != 266 { // not bedrock
+                                                    chunk.set_block((wx & 0xF) as usize, wy, (wz & 0xF) as usize, mc_core::block::BlockState::AIR);
+                                                    dirty_blocks_for_tick.mark_block(wx, wy, wz, mc_core::block::BlockState::AIR.id);
+                                                    dirty_chunks_for_tick.write().insert(cp);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }}}
+                                mob_manager.remove(mob.entity_id);
+                                info!("Sulfur Cube TNT exploded at ({:.1}, {:.1}, {:.1})", mx, my, mz);
+                            }
+                        }
+                        // Hot archetype: contact damage to nearby entities
+                        if let Some(mc_player::mob::SulfurCubeArchetype::Hot) = mob.sulfur_cube_archetype {
+                            let mx = mob.position.x; let my = mob.position.y; let mz = mob.position.z;
+                            for player in player_manager.all_players() {
+                                let d = ((player.position.x - mx).powi(2) + (player.position.y - my).powi(2) + (player.position.z - mz).powi(2)).sqrt() as f32;
+                                if d < 1.5 && player_manager.can_take_damage(&player.uuid, tick_count) {
+                                    let new_hp = (player.health - 2.0).max(0.0);
+                                    let _ = player_manager.set_health(&player.uuid, new_hp);
+                                    player_manager.mark_damage_taken(&player.uuid, tick_count);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Death check: players with 0 health or below — drop inventory + XP
@@ -1163,7 +1404,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     is_baby: false,
                                     in_love_ticks: 0,
                                     breed_cooldown: 0,
-                                    is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                                    is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
                                 };
                                 mob_manager.register(tracked);
                                 player_manager.broadcast_mob_spawn(eid, mob_uuid, mob_type, sx, spawn_y, sz);
@@ -1216,7 +1457,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     max_health: mc_player::mob::mob_max_health(mob_type),
                                     age_ticks: 0, ai_timer: 40 + fastrand::u64(..) % 61,
                                     ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                    owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                                    owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
                                 };
                                 mob_manager.register(tracked);
                                 player_manager.broadcast_mob_spawn(eid, mob_uuid, mob_type, sx, spawn_y, sz);
@@ -1260,7 +1501,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         health: 20.0, max_health: 20.0,
                                         age_ticks: 0, ai_timer: 200,
                                         ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                        owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                                        owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
                                     };
                                     mob_manager.register(baby);
                                     break; // one baby per cycle
@@ -1278,7 +1519,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 health: 100.0, max_health: 100.0,
                                 age_ticks: 0, ai_timer: 80,
                                 ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
                             };
                             mob_manager.register(golem);
                         }

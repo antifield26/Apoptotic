@@ -1133,6 +1133,150 @@ m.insert("cinnabar_brick_wall", 1262);
     m.insert("deepslate_tile_slab", 1355);
     m.insert("deepslate_tile_wall", 1356);
 
+    // ═══ Copper blocks + variants (1.21 family) — genuinely new additions ═══
+    m.insert("copper_block", 1357);
+    m.insert("exposed_copper", 1358);
+    m.insert("weathered_copper", 1359);
+    m.insert("oxidized_copper", 1360);
+    m.insert("cut_copper", 1361);
+    m.insert("exposed_cut_copper", 1362);
+    m.insert("weathered_cut_copper", 1363);
+    m.insert("oxidized_cut_copper", 1364);
+    m.insert("cut_copper_stairs", 1365);
+    m.insert("exposed_cut_copper_stairs", 1366);
+    m.insert("weathered_cut_copper_stairs", 1367);
+    m.insert("oxidized_cut_copper_stairs", 1368);
+    m.insert("cut_copper_slab", 1369);
+    m.insert("exposed_cut_copper_slab", 1370);
+    m.insert("weathered_cut_copper_slab", 1371);
+    m.insert("oxidized_cut_copper_slab", 1372);
+    m.insert("waxed_copper_block", 1373);
+    m.insert("waxed_exposed_copper", 1374);
+    m.insert("waxed_weathered_copper", 1375);
+    m.insert("waxed_oxidized_copper", 1376);
+    m.insert("waxed_cut_copper", 1377);
+    m.insert("waxed_exposed_cut_copper", 1378);
+    m.insert("waxed_weathered_cut_copper", 1379);
+    m.insert("waxed_oxidized_cut_copper", 1380);
+    m.insert("waxed_cut_copper_stairs", 1381);
+    m.insert("waxed_exposed_cut_copper_stairs", 1382);
+    m.insert("waxed_weathered_cut_copper_stairs", 1383);
+    m.insert("waxed_oxidized_cut_copper_stairs", 1384);
+    m.insert("waxed_cut_copper_slab", 1385);
+    m.insert("waxed_exposed_cut_copper_slab", 1386);
+    m.insert("waxed_weathered_cut_copper_slab", 1387);
+    m.insert("waxed_oxidized_cut_copper_slab", 1388);
+    // Copper grate (1.21)
+    m.insert("copper_grate", 1389);
+    m.insert("exposed_copper_grate", 1390);
+    m.insert("weathered_copper_grate", 1391);
+    m.insert("oxidized_copper_grate", 1392);
+    m.insert("waxed_copper_grate", 1393);
+    m.insert("waxed_exposed_copper_grate", 1394);
+    m.insert("waxed_weathered_copper_grate", 1395);
+    m.insert("waxed_oxidized_copper_grate", 1396);
+    // Copper bulb (1.21)
+    m.insert("copper_bulb", 1397);
+    m.insert("exposed_copper_bulb", 1398);
+    m.insert("weathered_copper_bulb", 1399);
+    m.insert("oxidized_copper_bulb", 1400);
+    m.insert("waxed_copper_bulb", 1401);
+    m.insert("waxed_exposed_copper_bulb", 1402);
+    m.insert("waxed_weathered_copper_bulb", 1403);
+    m.insert("waxed_oxidized_copper_bulb", 1404);
+    // Copper door + trapdoor (1.21)
+    m.insert("copper_door", 1405);
+    m.insert("exposed_copper_door", 1406);
+    m.insert("weathered_copper_door", 1407);
+    m.insert("oxidized_copper_door", 1408);
+    m.insert("waxed_copper_door", 1409);
+    m.insert("waxed_exposed_copper_door", 1410);
+    m.insert("waxed_weathered_copper_door", 1411);
+    m.insert("waxed_oxidized_copper_door", 1412);
+    m.insert("copper_trapdoor", 1413);
+    m.insert("exposed_copper_trapdoor", 1414);
+    m.insert("weathered_copper_trapdoor", 1415);
+    m.insert("oxidized_copper_trapdoor", 1416);
+    m.insert("waxed_copper_trapdoor", 1417);
+    m.insert("waxed_exposed_copper_trapdoor", 1418);
+    m.insert("waxed_weathered_copper_trapdoor", 1419);
+    m.insert("waxed_oxidized_copper_trapdoor", 1420);
+
+    // ═══ Tuff block family (1.21) ═══
+    m.insert("tuff_stairs", 1421);
+    m.insert("tuff_slab", 1422);
+    m.insert("tuff_wall", 1423);
+    m.insert("polished_tuff", 1424);
+    m.insert("polished_tuff_stairs", 1425);
+    m.insert("polished_tuff_slab", 1426);
+    m.insert("polished_tuff_wall", 1427);
+    m.insert("tuff_bricks", 1428);
+    m.insert("tuff_brick_stairs", 1429);
+    m.insert("tuff_brick_slab", 1430);
+    m.insert("tuff_brick_wall", 1431);
+    m.insert("chiseled_tuff", 1432);
+    m.insert("chiseled_tuff_bricks", 1433);
+
+    // ═══ Coral blocks (5 colors, alive + dead) ═══
+    let coral_types = ["tube","brain","bubble","fire","horn"];
+    for (i, ctype) in coral_types.iter().enumerate() {
+        let base = 1434 + (i as u32 * 3);
+        m.insert(Box::leak(format!("{}_coral_block", ctype).into_boxed_str()), base);
+        m.insert(Box::leak(format!("{}_coral", ctype).into_boxed_str()), base + 1);
+        m.insert(Box::leak(format!("{}_coral_fan", ctype).into_boxed_str()), base + 2);
+    }
+    for (i, ctype) in coral_types.iter().enumerate() {
+        let base = 1449 + (i as u32 * 3);
+        m.insert(Box::leak(format!("dead_{}_coral_block", ctype).into_boxed_str()), base);
+        m.insert(Box::leak(format!("dead_{}_coral", ctype).into_boxed_str()), base + 1);
+        m.insert(Box::leak(format!("dead_{}_coral_fan", ctype).into_boxed_str()), base + 2);
+    }
+
+    // ═══ Missing wood variants (fence gates, buttons, pressure plates, doors, trapdoors, signs) ═══
+    let wood_types = ["oak","spruce","birch","jungle","acacia","dark_oak","mangrove","cherry",
+        "bamboo","crimson","warped","pale_oak"];
+    for (i, wood) in wood_types.iter().enumerate() {
+        let base = 1464 + (i as u32 * 6);
+        m.insert(Box::leak(format!("{}_fence_gate", wood).into_boxed_str()), base);
+        m.insert(Box::leak(format!("{}_button", wood).into_boxed_str()), base + 1);
+        m.insert(Box::leak(format!("{}_pressure_plate", wood).into_boxed_str()), base + 2);
+        m.insert(Box::leak(format!("{}_trapdoor", wood).into_boxed_str()), base + 3);
+        m.insert(Box::leak(format!("{}_door", wood).into_boxed_str()), base + 4);
+        m.insert(Box::leak(format!("{}_sign", wood).into_boxed_str()), base + 5);
+    }
+
+    // ═══ 1.21 Trial Chambers items ═══
+    m.insert("trial_spawner", 1536);
+    m.insert("ominous_trial_spawner", 1537);
+    m.insert("vault", 1538);
+    m.insert("ominous_vault", 1539);
+    m.insert("trial_key", 1540);
+    m.insert("ominous_trial_key", 1541);
+    m.insert("ominous_bottle", 1542);
+    m.insert("breeze_rod", 1543);
+    m.insert("wind_charge", 1544);
+    m.insert("heavy_core", 1545);
+    m.insert("mace", 1546);
+    m.insert("flow_pottery_sherd", 1547);
+    m.insert("guster_pottery_sherd", 1548);
+    m.insert("scrape_pottery_sherd", 1549);
+    m.insert("flow_banner_pattern", 1550);
+    m.insert("guster_banner_pattern", 1551);
+
+    // ═══ 1.21.5 Spring to Life items ═══
+    m.insert("firefly_bush", 1552);
+    m.insert("pale_oak_leaves", 1553);
+    m.insert("pale_oak_sapling", 1554);
+    m.insert("pale_moss_block", 1555);
+    m.insert("pale_moss_carpet", 1556);
+    m.insert("pale_hanging_moss", 1557);
+    m.insert("cold_cow_spawn_egg", 1558);
+    m.insert("warm_cow_spawn_egg", 1559);
+    m.insert("cold_pig_spawn_egg", 1560);
+    m.insert("warm_pig_spawn_egg", 1561);
+    m.insert("cold_chicken_spawn_egg", 1562);
+    m.insert("warm_chicken_spawn_egg", 1563);
+
     m
 });
 

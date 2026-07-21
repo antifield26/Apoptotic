@@ -205,6 +205,166 @@ pub fn get_trade_offers(profession_id: i32) -> Vec<TradeOffer> {
     Profession::from_id(profession_id).trades()
 }
 
+// ═══ 26.2 Villager Gossip System ═══
+
+/// Gossip types affecting villager reputation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GossipType {
+    /// Curing a zombie villager (+20 reputation, permanent decay)
+    MajorPositive,
+    /// Trading with a villager (+1 reputation, short decay)
+    MinorPositive,
+    /// Trading (+1, spread to nearby villagers)
+    Trade,
+    /// Attacking a villager (-1 reputation)
+    MinorNegative,
+    /// Killing a villager (-25 reputation, permanent decay)
+    MajorNegative,
+}
+
+impl GossipType {
+    pub fn base_value(&self) -> i32 {
+        match self {
+            Self::MajorPositive => 20,
+            Self::MinorPositive => 1,
+            Self::Trade => 1,
+            Self::MinorNegative => -1,
+            Self::MajorNegative => -25,
+        }
+    }
+
+    pub fn decay_ticks(&self) -> u32 {
+        match self {
+            Self::MajorPositive => 24000,  // 1 MC day
+            Self::MinorPositive => 6000,   // 5 min
+            Self::Trade => 1200,            // 1 min
+            Self::MinorNegative => 6000,
+            Self::MajorNegative => 24000,
+        }
+    }
+
+    pub fn max_value(&self) -> i32 {
+        match self {
+            Self::MajorPositive => 100,
+            Self::Trade => 200,
+            _ => 25,
+        }
+    }
+}
+
+/// A single gossip entry — villager's opinion about a player
+#[derive(Debug, Clone)]
+pub struct GossipEntry {
+    pub target: uuid::Uuid,   // the player this gossip is about
+    pub gossip_type: GossipType,
+    pub value: i32,
+    pub age_ticks: u32,       // time since gossip was created
+}
+
+/// Per-villager gossip storage
+#[derive(Debug, Clone)]
+pub struct VillagerGossip {
+    pub entries: Vec<GossipEntry>,
+}
+
+impl VillagerGossip {
+    pub fn new() -> Self { Self { entries: Vec::new() } }
+
+    /// Add a gossip entry, merging with existing entries of the same type+target
+    pub fn add(&mut self, target: uuid::Uuid, gossip_type: GossipType) {
+        let base = gossip_type.base_value();
+        let max_val = gossip_type.max_value();
+        // Find existing entry for same target+type
+        if let Some(entry) = self.entries.iter_mut()
+            .find(|e| e.target == target && e.gossip_type == gossip_type) {
+            entry.value = (entry.value + base).min(max_val);
+            entry.age_ticks = 0;
+        } else {
+            self.entries.push(GossipEntry {
+                target, gossip_type, value: base.max(0).min(max_val), age_ticks: 0,
+            });
+        }
+    }
+
+    /// Tick gossip aging — remove expired entries
+    pub fn tick(&mut self) {
+        for entry in self.entries.iter_mut() {
+            entry.age_ticks = entry.age_ticks.saturating_add(1);
+        }
+        self.entries.retain(|e| {
+            let max_age = e.gossip_type.decay_ticks() * 2;
+            e.age_ticks < max_age && e.value.abs() > 2
+        });
+    }
+
+    /// Get total reputation for a player (sum of all gossip values)
+    pub fn reputation_for(&self, target: &uuid::Uuid) -> i32 {
+        self.entries.iter()
+            .filter(|e| &e.target == target)
+            .map(|e| e.value * if e.gossip_type == GossipType::Trade { 1 } else { 1 })
+            .sum()
+    }
+
+    /// Get the highest priority gossip (for price modification)
+    pub fn trade_discount(&self, target: &uuid::Uuid) -> f64 {
+        let rep = self.reputation_for(target);
+        if rep > 0 {
+            (rep as f64 * 0.01).min(0.3) // up to 30% discount
+        } else if rep < 0 {
+            (rep as f64 * 0.02).max(-0.5) // up to 50% price increase
+        } else {
+            0.0
+        }
+    }
+
+    /// Spread gossip to nearby villager (called during villager interaction)
+    pub fn spread_to(&self, other: &mut VillagerGossip) {
+        for entry in &self.entries {
+            if entry.gossip_type == GossipType::Trade
+                || entry.gossip_type == GossipType::MinorPositive {
+                other.add(entry.target, GossipType::Trade);
+            }
+        }
+    }
+}
+
+/// Global village gossip manager (tracks reputation across all villagers)
+pub struct GossipManager {
+    /// villager entity_id → gossip
+    pub villager_gossips: dashmap::DashMap<i32, VillagerGossip>,
+}
+
+impl GossipManager {
+    pub fn new() -> Self { Self { villager_gossips: dashmap::DashMap::new() } }
+
+    pub fn get_or_create(&self, entity_id: i32) -> dashmap::mapref::one::RefMut<i32, VillagerGossip> {
+        self.villager_gossips.entry(entity_id).or_insert_with(VillagerGossip::new)
+    }
+
+    pub fn tick(&self) {
+        for mut entry in self.villager_gossips.iter_mut() {
+            entry.value_mut().tick();
+        }
+    }
+}
+
+/// Global gossip manager singleton
+pub static GLOBAL_GOSSIP: std::sync::LazyLock<GossipManager> =
+    std::sync::LazyLock::new(GossipManager::new);
+
+/// Record a trade with a villager — adds positive gossip
+pub fn record_trade(villager_eid: i32, player_uuid: uuid::Uuid) {
+    let mut gossip = GLOBAL_GOSSIP.get_or_create(villager_eid);
+    gossip.add(player_uuid, GossipType::Trade);
+    gossip.add(player_uuid, GossipType::MinorPositive);
+}
+
+/// Record attacking a villager — adds negative gossip
+pub fn record_villager_hurt(villager_eid: i32, player_uuid: uuid::Uuid) {
+    let mut gossip = GLOBAL_GOSSIP.get_or_create(villager_eid);
+    gossip.add(player_uuid, GossipType::MinorNegative);
+}
+
 /// 验证交易是否可行 (玩家有足够物品)
 pub fn can_trade(offer: &TradeOffer, player_inventory: &[Option<crate::inventory::ItemStack>]) -> bool {
     let mut needed = offer.input_count as u32;

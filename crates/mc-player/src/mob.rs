@@ -36,6 +36,12 @@ pub struct TrackedMob {
     /// EAR 2.0: immunity flags — mob won't skip AI when in dangerous states
     pub is_on_fire: bool,
     pub is_in_water: bool,
+    /// Sulfur Cube (26.2): absorbed block archetype
+    pub sulfur_cube_archetype: Option<SulfurCubeArchetype>,
+    /// Sulfur Cube (26.2): the block ID absorbed, if any
+    pub absorbed_block_id: Option<u32>,
+    /// Sulfur Cube (26.2): whether the cube is small (from splitting)
+    pub is_small_cube: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,6 +52,155 @@ pub enum MobAiState {
     Wandering { target_x: f64, target_z: f64 },
     Chasing { target_uuid: Uuid },
     AboutToExplode { fuse_ticks: u8 },
+}
+
+/// 26.2 Chaos Cubed — Sulfur Cube archetypes based on absorbed block type
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SulfurCubeArchetype {
+    /// Mineral/soil blocks — medium speed/bounce, buoyant
+    Regular,
+    /// Wooden blocks — fast, high bounce, buoyant
+    Bouncy,
+    /// Stone-like blocks — slow, high bounce
+    SlowBouncy,
+    /// Metal blocks — slow, low bounce
+    SlowFlat,
+    /// Organic blocks — fast, low bounce
+    FastFlat,
+    /// Wool blocks — slow, high bounce, high air drag, buoyant
+    Light,
+    /// Ice blocks — fast, no bounce, low friction
+    FastSliding,
+    /// Shroom blocks — slow, no bounce, low friction
+    SlowSliding,
+    /// Soul Sand/Soil — very slow, high friction
+    HighResistance,
+    /// Honeycomb — extreme friction, no bounce
+    Sticky,
+    /// TNT — primed by redstone (6s) or explosion (0.75-3s), no bucket, no shear
+    Explosive { fuse_ticks: u16, primed: bool },
+    /// Magma block — damages entities on contact
+    Hot,
+}
+
+impl SulfurCubeArchetype {
+    /// Movement speed multiplier (0.0-2.0)
+    pub fn speed_mult(&self) -> f64 {
+        match self {
+            Self::Regular => 1.0,
+            Self::Bouncy => 1.5,
+            Self::SlowBouncy => 0.5,
+            Self::SlowFlat => 0.5,
+            Self::FastFlat => 1.5,
+            Self::Light => 0.5,
+            Self::FastSliding => 2.0,
+            Self::SlowSliding => 0.5,
+            Self::HighResistance => 0.2,
+            Self::Sticky => 0.3,
+            Self::Explosive { .. } => 0.0, // immobile when primed
+            Self::Hot => 1.0,
+        }
+    }
+
+    /// Bounce factor (0.0 = no bounce, 1.0 = full bounce)
+    pub fn bounce_factor(&self) -> f64 {
+        match self {
+            Self::Regular => 0.6,
+            Self::Bouncy => 0.9,
+            Self::SlowBouncy => 0.9,
+            Self::SlowFlat => 0.1,
+            Self::FastFlat => 0.1,
+            Self::Light => 0.9,
+            Self::FastSliding => 0.0,
+            Self::SlowSliding => 0.0,
+            Self::HighResistance => 0.1,
+            Self::Sticky => 0.0,
+            Self::Explosive { .. } => 0.0,
+            Self::Hot => 0.6,
+        }
+    }
+
+    /// Friction factor (0.0 = ice-like, 1.0 = normal)
+    pub fn friction(&self) -> f64 {
+        match self {
+            Self::Regular => 0.6,
+            Self::Bouncy => 0.5,
+            Self::SlowBouncy => 0.5,
+            Self::SlowFlat => 0.6,
+            Self::FastFlat => 0.4,
+            Self::Light => 0.7,
+            Self::FastSliding => 0.05,
+            Self::SlowSliding => 0.1,
+            Self::HighResistance => 0.9,
+            Self::Sticky => 1.0,
+            Self::Explosive { .. } => 1.0,
+            Self::Hot => 0.6,
+        }
+    }
+
+    /// Air drag modifier (higher = more drag)
+    pub fn air_drag(&self) -> f64 {
+        match self {
+            Self::Light => 2.0,
+            _ => 1.0,
+        }
+    }
+
+    /// Whether the cube is buoyant in water
+    pub fn is_buoyant(&self) -> bool {
+        matches!(self, Self::Regular | Self::Bouncy | Self::Light)
+    }
+
+    /// Whether the cube can be bucketed
+    pub fn can_bucket(&self) -> bool {
+        !matches!(self, Self::Explosive { primed: true, .. })
+    }
+
+    /// Whether the cube can be sheared
+    pub fn can_shear(&self) -> bool {
+        !matches!(self, Self::Explosive { primed: true, .. })
+    }
+}
+
+/// Determine the SulfurCube archetype from an absorbed block ID.
+/// Returns None if the block is not absorbable.
+pub fn sulfur_cube_archetype_from_block(block_id: u32) -> Option<SulfurCubeArchetype> {
+    // Blocks are identified by their registered item IDs (mc-core item registry)
+    match block_id {
+        // TNT → Explosive
+        25 => Some(SulfurCubeArchetype::Explosive { fuse_ticks: 0, primed: false }),
+        // Magma Block → Hot
+        312 => Some(SulfurCubeArchetype::Hot),
+        // Honeycomb Block → Sticky
+        1257 => Some(SulfurCubeArchetype::Sticky),
+        // Soul Sand (961) / Soul Soil (962) → HighResistance
+        961 | 962 => Some(SulfurCubeArchetype::HighResistance),
+        // Ice blocks → FastSliding
+        47 | 48 | 49 => Some(SulfurCubeArchetype::FastSliding), // ice, packed_ice, blue_ice
+        // Wool (80-95) → Light
+        80..=95 => Some(SulfurCubeArchetype::Light),
+        // Mushroom blocks → SlowSliding
+        101 | 102 | 103 | 135 | 136 | 164 => Some(SulfurCubeArchetype::SlowSliding),
+        // Wooden blocks → Bouncy
+        13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 => Some(SulfurCubeArchetype::Bouncy),
+        // Stone-like blocks → SlowBouncy
+        1 | 2 | 3 | 4 | 5 | 6 | 7 | 12 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 |
+        269..=318 => Some(SulfurCubeArchetype::SlowBouncy),
+        // Metal blocks → SlowFlat
+        40 | 41 | 42 | 43 | 44 | 45 | 46 => Some(SulfurCubeArchetype::SlowFlat),
+        // Organic blocks → FastFlat
+        8 | 9 | 10 | 11 | 24 | 26 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 |
+        60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 |
+        73 | 74 | 75 | 76 | 77 | 78 | 79 => Some(SulfurCubeArchetype::FastFlat),
+        // Default: most mineral/soil blocks → Regular
+        _ => {
+            // Only absorb solid blocks (not air, not liquids)
+            if block_id == 0 || block_id == 267 || block_id == 268 {
+                return None; // air, water, lava
+            }
+            Some(SulfurCubeArchetype::Regular)
+        }
+    }
 }
 
 
@@ -328,6 +483,140 @@ impl MobManager {
         })
     }
 
+    // ═══ 26.2 Sulfur Cube interactions ═══
+
+    /// Feed a block to a Sulfur Cube — set archetype and disable AI.
+    /// Returns the archetype if successful.
+    pub fn sulfur_cube_absorb(&self, entity_id: i32, block_id: u32) -> Option<SulfurCubeArchetype> {
+        let archetype = sulfur_cube_archetype_from_block(block_id)?;
+        self.mobs.get_mut(&entity_id).map(|mut mob| {
+            mob.sulfur_cube_archetype = Some(archetype);
+            mob.absorbed_block_id = Some(block_id);
+            // AI disabled when block is absorbed (cube becomes physical object)
+            mob.ai_state = MobAiState::Idle;
+            archetype
+        })
+    }
+
+    /// Shear a Sulfur Cube — remove absorbed block, re-enable AI.
+    /// Returns the dropped block ID if successful.
+    pub fn sulfur_cube_shear(&self, entity_id: i32) -> Option<u32> {
+        self.mobs.get_mut(&entity_id).and_then(|mut mob| {
+            let archetype = mob.sulfur_cube_archetype?;
+            // Cannot shear primed TNT
+            if !archetype.can_shear() {
+                return None;
+            }
+            let block_id = mob.absorbed_block_id.take();
+            mob.sulfur_cube_archetype = None;
+            block_id
+        })
+    }
+
+    /// Bucket a Sulfur Cube — removes the entity and returns true if successful.
+    /// Only works on large cubes, not primed Explosive.
+    pub fn sulfur_cube_bucket(&self, entity_id: i32) -> bool {
+        if let Some(mob) = self.mobs.get(&entity_id) {
+            if mob.is_small_cube {
+                return false; // only large cubes can be bucketed
+            }
+            if let Some(arch) = mob.sulfur_cube_archetype {
+                if !arch.can_bucket() {
+                    return false; // primed TNT cube cannot be bucketed
+                }
+            }
+            // Also can bucket cubes without absorbed block
+        } else {
+            return false;
+        }
+        // Remove the entity
+        self.remove(entity_id);
+        true
+    }
+
+    /// Feed a slimeball to a small Sulfur Cube — grow back to large.
+    /// Returns true if successful.
+    pub fn sulfur_cube_feed_slimeball(&self, entity_id: i32) -> bool {
+        self.mobs.get_mut(&entity_id).map(|mut mob| {
+            if mob.is_small_cube {
+                mob.is_small_cube = false;
+                mob.health = mob.max_health; // restore full health
+                true
+            } else {
+                false
+            }
+        }).unwrap_or(false)
+    }
+
+    /// Prime an Explosive Sulfur Cube's TNT fuse.
+    /// Sets primed=true and fuse_ticks to the given value.
+    pub fn prime_explosive(&self, entity_id: i32, fuse_ticks: u16) -> bool {
+        self.mobs.get_mut(&entity_id).map(|mut mob| {
+            if let Some(SulfurCubeArchetype::Explosive { primed: _, .. }) = mob.sulfur_cube_archetype {
+                mob.sulfur_cube_archetype = Some(SulfurCubeArchetype::Explosive { fuse_ticks, primed: true });
+                true
+            } else {
+                false
+            }
+        }).unwrap_or(false)
+    }
+
+    /// Check if a mob is a Sulfur Cube (entity type 131)
+    pub fn is_sulfur_cube(&self, entity_id: i32) -> bool {
+        self.mobs.get(&entity_id)
+            .map(|m| m.mob_type == ET::SULFUR_CUBE)
+            .unwrap_or(false)
+    }
+
+    /// Create a small Sulfur Cube from splitting.
+    /// Returns the new entity_id.
+    pub fn sulfur_cube_spawn_small(
+        &self,
+        parent: &TrackedMob,
+        next_eid: &std::sync::atomic::AtomicI32,
+    ) -> i32 {
+        let eid = next_eid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let small = TrackedMob {
+            entity_id: eid,
+            uuid: uuid::Uuid::new_v4(),
+            mob_type: ET::SULFUR_CUBE,
+            position: mc_core::position::Position::new(
+                parent.position.x + (fastrand::f64() - 0.5) * 0.5,
+                parent.position.y,
+                parent.position.z + (fastrand::f64() - 0.5) * 0.5,
+            ),
+            health: 4.0,
+            max_health: 4.0,
+            age_ticks: 0,
+            ai_timer: 0,
+            ai_state: MobAiState::Idle,
+            attack_cooldown: 0,
+            last_sync_tick: 0,
+            owner_uuid: None,
+            is_tamed: false,
+            is_sitting: false,
+            tame_attempts: 0,
+            is_baby: false,
+            in_love_ticks: 0,
+            breed_cooldown: 0,
+            is_sheared: false,
+            is_on_fire: false,
+            is_in_water: false,
+            path: Vec::new(),
+            path_last_tick: 0,
+            sulfur_cube_archetype: None,
+            absorbed_block_id: None,
+            is_small_cube: true,
+        };
+        let chunk = (
+            (small.position.x.floor() as i32).div_euclid(16),
+            (small.position.z.floor() as i32).div_euclid(16),
+        );
+        self.mobs.insert(eid, small);
+        self.chunk_mobs.entry(chunk).or_default().push(eid);
+        eid
+    }
+
     /// 获取某区块中的所有生物
     pub fn get_in_chunk(&self, chunk_x: i32, chunk_z: i32) -> Vec<TrackedMob> {
         self.chunk_mobs.get(&(chunk_x, chunk_z))
@@ -485,15 +774,197 @@ impl MobManager {
                         let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
                         mob.ai_timer = 30; continue;
                     }
-                    // Sulfur Cube (131): 26.2 passive — bouncy wander, block absorption
-                    if mob.mob_type == ET::SULFUR_CUBE && mob.age_ticks % 30 == 0 {
+                    // Bat (64): hang from ceiling, fly at night
+                    if mob.mob_type == ET::BAT && mob.age_ticks % 20 == 0 {
+                        // Hang near ceiling during day, fly at night
+                        let is_night = mob.age_ticks % 24000 > 13000;
+                        if is_night {
+                            let angle = fastrand::f64() * std::f64::consts::TAU;
+                            mob.position.x += angle.cos() * 3.0;
+                            mob.position.z += angle.sin() * 3.0;
+                            mob.position.y = (mob.position.y + (fastrand::f64() - 0.5) * 2.0).clamp(20.0, 250.0);
+                        } else {
+                            // Hang: stay near ceiling
+                            mob.position.y = (mob.position.y).max(60.0);
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 15; continue;
+                    }
+                    // Goat (124): charge attack + high jump
+                    if mob.mob_type == ET::GOAT && mob.age_ticks % 40 == 0 {
                         let angle = fastrand::f64() * std::f64::consts::TAU;
-                        let bounce = 0.5 + fastrand::f64() * 1.0;
-                        mob.position.x += angle.cos() * 2.0;
-                        mob.position.z += angle.sin() * 2.0;
-                        mob.position.y += bounce; // bouncy!
+                        if fastrand::bool() && let Some(pm) = player_manager {
+                            for player in pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dz = player.position.z - mob.position.z;
+                                if dx*dx + dz*dz < 36.0 && dx*dx + dz*dz > 1.0 {
+                                    mob.position.x += dx.signum() * 3.0;
+                                    mob.position.z += dz.signum() * 3.0;
+                                    if dx*dx + dz*dz < 4.0 {
+                                        let _ = pm.set_health(&player.uuid, (player.health - 3.0).max(0.0));
+                                    }
+                                    break;
+                                }
+                            }
+                        } else {
+                            mob.position.x += angle.cos() * 2.0;
+                            mob.position.z += angle.sin() * 2.0;
+                        }
+                        if fastrand::u32(..).is_multiple_of(3) { mob.position.y += 2.0 + fastrand::f64() * 3.0; }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 30; continue;
+                    }
+                    // Fox (121): nocturnal hunter — sleep by day, hunt small prey at night
+                    if mob.mob_type == 121 && mob.age_ticks % 50 == 0 {
+                        let is_day = (mob.age_ticks % 24000) < 13000;
+                        if is_day {
+                            // Sleep: stay still
+                            mob.ai_timer = 40; continue;
+                        }
+                        // Hunt chickens/rabbits at night
+                        let mut hunted = false;
+                        if let Some(pm) = player_manager {
+                            // Jump-pounce: high arc attack
+                            if fastrand::bool() {
+                                mob.position.y += 1.5;
+                                let angle = fastrand::f64() * std::f64::consts::TAU;
+                                mob.position.x += angle.cos() * 4.0;
+                                mob.position.z += angle.sin() * 4.0;
+                                hunted = true;
+                            }
+                        }
+                        if !hunted {
+                            let angle = fastrand::f64() * std::f64::consts::TAU;
+                            mob.position.x += angle.cos() * 2.0;
+                            mob.position.z += angle.sin() * 2.0;
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 35; continue;
+                    }
+                    // Panda (113): lazy wander, roll occasionally, sit and eat bamboo
+                    if mob.mob_type == 113 && mob.age_ticks % 60 == 0 {
+                        if fastrand::u32(..).is_multiple_of(4) {
+                            // Roll! Fast barrel-roll movement
+                            let angle = fastrand::f64() * std::f64::consts::TAU;
+                            mob.position.x += angle.cos() * 5.0;
+                            mob.position.z += angle.sin() * 5.0;
+                        } else if fastrand::u32(..).is_multiple_of(3) {
+                            // Sit and eat (no movement)
+                        } else {
+                            // Slow waddle
+                            let angle = fastrand::f64() * std::f64::consts::TAU;
+                            mob.position.x += angle.cos() * 1.0;
+                            mob.position.z += angle.sin() * 1.0;
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 40; continue;
+                    }
+                    // Wolf (95): autonomous hunt + pack behavior (tamed handling in interact)
+                    if mob.mob_type == 95 && !mob.is_tamed && mob.age_ticks % 50 == 0
+                        && let Some(pm) = player_manager {
+                            // Hunt small prey (chickens, rabbits) autonomously
+                            if fastrand::bool() {
+                                let angle = fastrand::f64() * std::f64::consts::TAU;
+                                mob.position.x += angle.cos() * 3.5;
+                                mob.position.z += angle.sin() * 3.5;
+                            } else {
+                                let angle = fastrand::f64() * std::f64::consts::TAU;
+                                mob.position.x += angle.cos() * 1.5;
+                                mob.position.z += angle.sin() * 1.5;
+                            }
+                            let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                            mob.ai_timer = 30; continue;
+                        }
+                    // CaveSpider (19): same as spider + poison on attack
+                    if mob.mob_type == 19 && has_target && mob.attack_cooldown == 0 && dist < 2.5 {
+                        mob.attack_cooldown = 15;
+                        if let Some(pm) = player_manager {
+                            // Apply poison effect on hit
+                            for player in pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dz = player.position.z - mob.position.z;
+                                if dx*dx + dz*dz < 6.25 {
+                                    let _ = pm.add_effect(&player.uuid, mc_core::effect::ActiveEffect {
+                                        effect: mc_core::effect::EffectType::Poison,
+                                        amplifier: 0, duration_ticks: 140,
+                                    });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Bee (105): pollinate flowers → return to hive
+                    if mob.mob_type == 105 && mob.age_ticks % 40 == 0 {
+                        // Hover near flowers during day, return to hive at night/rain
+                        let is_day = (mob.age_ticks % 24000) < 13000;
+                        if is_day {
+                            let angle = fastrand::f64() * std::f64::consts::TAU;
+                            mob.position.x += angle.cos() * 1.5;
+                            mob.position.z += angle.sin() * 1.5;
+                            mob.position.y += (fastrand::f64() - 0.5) * 1.0;
+                        } else {
+                            // Return to hive: drift downward
+                            mob.position.y = (mob.position.y - 0.2).max(63.0);
+                        }
                         let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
                         mob.ai_timer = 20; continue;
+                    }
+                    // Wandering Trader (95) + Trader Llama (121): slow wander, despawn timer
+                    if (mob.mob_type == 95 || mob.mob_type == 121) && mob.age_ticks % 60 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        mob.position.x += angle.cos() * 1.0;
+                        mob.position.z += angle.sin() * 1.0;
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        // Despawn after ~48000 ticks (2 MC days) if no players nearby
+                        if mob.age_ticks > 48000 {
+                            // Check if any player is within 32 blocks
+                            let mut near_player = false;
+                            if let Some(pm) = player_manager {
+                                for player in pm.all_players() {
+                                    let dx = player.position.x - mob.position.x;
+                                    let dz = player.position.z - mob.position.z;
+                                    if dx*dx + dz*dz < 1024.0 { // 32 blocks
+                                        near_player = true; break;
+                                    }
+                                }
+                            }
+                            if !near_player {
+                                mob.health = -1.0; // mark for removal
+                            }
+                        }
+                        mob.ai_timer = 35; continue;
+                    }
+                    // Sulfur Cube (131): 26.2 Chaos Cubed — archetype-aware wander
+                    if mob.mob_type == ET::SULFUR_CUBE && mob.age_ticks % 30 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        // Explosive archetype: immobile, tick fuse
+                        if let Some(SulfurCubeArchetype::Explosive { fuse_ticks, primed }) = mob.sulfur_cube_archetype {
+                            let new_fuse = if primed { fuse_ticks.saturating_sub(1) } else { fuse_ticks };
+                            mob.sulfur_cube_archetype = Some(SulfurCubeArchetype::Explosive { fuse_ticks: new_fuse, primed });
+                            mob.ai_timer = 20;
+                            let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                            continue;
+                        }
+                        let arch = mob.sulfur_cube_archetype;
+                        let speed = arch.map(|a| a.speed_mult()).unwrap_or(1.0);
+                        let bounce = arch.map(|a| a.bounce_factor()).unwrap_or(0.6);
+                        // Small cubes: shorter hops
+                        let (hop_dist, hop_height) = if mob.is_small_cube {
+                            (1.0, 0.3 + fastrand::f64() * 0.3)
+                        } else {
+                            (2.0 * speed, (0.5 + fastrand::f64() * 0.8) * bounce.max(0.2))
+                        };
+                        let drag = arch.map(|a| a.air_drag()).unwrap_or(1.0);
+                        mob.position.x += angle.cos() * hop_dist / drag;
+                        mob.position.z += angle.sin() * hop_dist / drag;
+                        mob.position.y += hop_height;
+                        let friction = arch.map(|a| a.friction()).unwrap_or(0.6);
+                        let next_hop_delay = (30.0 / friction.max(0.1)).min(80.0) as u64;
+                        // 26.2: entity bounce emits vibration (frequency 2) for Sculk Sensor
+                        let _ = self.position_tx.send(MobPositionEvent {
+                            entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z,
+                        });
+                        mob.ai_timer = next_hop_delay; continue;
                     }
                     // Mooshroom (128): cow-like wander
                     if mob.mob_type == ET::MOOSHROOM && mob.age_ticks % 60 == 0 {
@@ -1800,6 +2271,7 @@ mod tests {
             owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0,
             is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false,
             path: vec![], path_last_tick: 0, is_on_fire: false, is_in_water: false,
+            sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
         }
     }
 

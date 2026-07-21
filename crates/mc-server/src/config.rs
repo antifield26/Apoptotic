@@ -46,7 +46,15 @@ pub struct ServerConfig {
     pub version_name: String,
     #[serde(default)]
     pub server_links: Vec<ServerLinkConfig>,
+    /// 26.2: seconds of chat spam before auto-kick (0 disables)
+    #[serde(default = "default_spam_threshold")]
+    pub chat_spam_threshold_seconds: u32,
+    /// 26.2: seconds of command spam before auto-kick (0 disables)
+    #[serde(default = "default_spam_threshold")]
+    pub command_spam_threshold_seconds: u32,
 }
+
+fn default_spam_threshold() -> u32 { 10 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ServerLinkConfig {
@@ -109,7 +117,18 @@ pub struct PerformanceConfig {
     pub max_chunks_in_memory: usize,
     #[serde(default = "default_entity_broadcast_radius")]
     pub entity_broadcast_radius: f64,
+    /// RPi 5: pin tick thread to specific core (0-based, -1 = no pinning)
+    #[serde(default = "default_cpu_affinity")]
+    pub tick_core_affinity: i32,
+    /// RPi 5: pin I/O threads to specific core (-1 = no pinning)
+    #[serde(default = "default_cpu_affinity")]
+    pub io_core_affinity: i32,
+    /// Use transparent hugepages for chunk store (Linux only)
+    #[serde(default)]
+    pub use_hugepages: bool,
 }
+
+fn default_cpu_affinity() -> i32 { -1 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistenceConfig {
@@ -233,6 +252,8 @@ impl Default for ServerConfig {
             host: default_host(),
             port: default_port(),
             max_players: default_max_players(),
+            chat_spam_threshold_seconds: default_spam_threshold(),
+            command_spam_threshold_seconds: default_spam_threshold(),
             motd: default_motd(),
             online_mode: false,
             compression_threshold: default_compression_threshold(),
@@ -277,6 +298,9 @@ impl Default for PerformanceConfig {
             chunk_threads: default_chunk_threads(),
             max_chunks_in_memory: default_max_chunks_in_memory(),
             entity_broadcast_radius: default_entity_broadcast_radius(),
+            tick_core_affinity: default_cpu_affinity(),
+            io_core_affinity: default_cpu_affinity(),
+            use_hugepages: false,
         }
     }
 }
@@ -358,6 +382,8 @@ impl Config {
         match (section.as_str(), field.as_str()) {
             ("server", "port") => self.server.port = parse_or_warn(value),
             ("server", "max_players") => self.server.max_players = parse_or_warn(value),
+            ("server", "chat-spam-threshold-seconds") => self.server.chat_spam_threshold_seconds = parse_or_warn(value),
+            ("server", "command-spam-threshold-seconds") => self.server.command_spam_threshold_seconds = parse_or_warn(value),
             ("server", "motd") => self.server.motd = value.to_string(),
             ("server", "online_mode") => self.server.online_mode = parse_or_warn(value),
             ("lan", "enabled") => self.lan.enabled = parse_or_warn(value),

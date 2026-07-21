@@ -190,3 +190,114 @@ pub fn is_in_lava(chunk_store: &ChunkStore, x: f64, y: f64, z: f64) -> bool {
     let bx = x as i32; let by = y as i32; let bz = z as i32;
     get_block(chunk_store, bx, by, bz).map(|b| b.id == LAVA_ID).unwrap_or(false)
 }
+
+// ═══ 26.2 Chaos Cubed: Potent Sulfur mechanics ═══
+
+/// Potent Sulfur block ID (from item registry — corresponds to BlockState ID)
+pub const POTENT_SULFUR_ID: u32 = 1252;
+/// Maximum water columns above Potent Sulfur for geyser detection
+const GEYSER_MAX_WATER: i32 = 4;
+
+/// Tick Potent Sulfur effects: nausea gas clouds, bubble columns, and geysers.
+/// Should be called every ~20 ticks (1 second). Scans loaded chunks for Potent Sulfur blocks.
+pub fn tick_potent_sulfur(chunk_store: &ChunkStore) -> Vec<PotentSulfurEvent> {
+    let mut events = Vec::new();
+    let all = chunk_store.all_chunks();
+    for (chunk_pos, chunk) in &all {
+        let cx = chunk_pos.x;
+        let cz = chunk_pos.z;
+        // Scan underground region only (Sulfur Caves generate deep underground)
+        // y range -64..64 covers deepslate layer, stone layer, and cave zones
+        for y in -64..64 {
+            for lx in 0..16 {
+                for lz in 0..16 {
+                    if chunk.get_block(lx, y, lz).id != POTENT_SULFUR_ID {
+                        continue;
+                    }
+                    let wx = cx * 16 + lx as i32;
+                    let wz = cz * 16 + lz as i32;
+                    let wy = y;
+                    // Check: is Potent Sulfur underwater?
+                    let above_id = get_block_id(chunk_store, wx, wy + 1, wz);
+                    let is_underwater = above_id == WATER_ID;
+                    // Check: magma or lava below?
+                    let below_id = get_block_id(chunk_store, wx, wy - 1, wz);
+                    let is_on_magma = below_id == MAGMA_BLOCK_ID;
+                    let is_on_lava = below_id == LAVA_ID;
+                    // Count water source blocks above
+                    let mut water_count = 0i32;
+                    if is_on_magma || is_on_lava {
+                        for dy in 1..=GEYSER_MAX_WATER {
+                            if get_block_id(chunk_store, wx, wy + dy, wz) == WATER_ID {
+                                water_count += 1;
+                            } else { break; }
+                        }
+                    }
+                    if is_underwater {
+                        events.push(PotentSulfurEvent::NauseaCloud {
+                            x: wx as f64 + 0.5, y: (wy + 1) as f64, z: wz as f64 + 0.5,
+                            radius: 3.0,
+                        });
+                        // Bubble column
+                        let mut bubbles = 0i32;
+                        for dy in 1..=4 {
+                            if get_block_id(chunk_store, wx, wy + dy, wz) == WATER_ID {
+                                bubbles += 1;
+                            } else { break; }
+                        }
+                        if bubbles > 0 {
+                            events.push(PotentSulfurEvent::BubbleColumn {
+                                x: wx as f64 + 0.5, y: wy as f64, z: wz as f64 + 0.5,
+                                height: bubbles,
+                            });
+                        }
+                    }
+                    if water_count > 0 && (is_on_magma || is_on_lava) {
+                        events.push(PotentSulfurEvent::Geyser {
+                            x: wx as f64 + 0.5, y: wy as f64 + 1.0, z: wz as f64 + 0.5,
+                            water_columns: water_count,
+                            geyser_type: if is_on_lava { GeyserType::Continuous } else { GeyserType::MagmaRandom },
+                        });
+                    }
+                }
+            }
+        }
+    }
+    events
+}
+
+/// Helper: get block ID at world position (without chunk reference)
+fn get_block_id(chunk_store: &ChunkStore, wx: i32, wy: i32, wz: i32) -> u32 {
+    let cp = mc_core::position::ChunkPos::new(wx >> 4, wz >> 4);
+    if let Some(chunk) = chunk_store.get(&cp) {
+        chunk.get_block((wx & 0xF) as usize, wy, (wz & 0xF) as usize).id
+    } else {
+        0
+    }
+}
+
+/// Events produced by Potent Sulfur tick
+#[derive(Debug, Clone)]
+pub enum PotentSulfurEvent {
+    NauseaCloud {
+        x: f64, y: f64, z: f64,
+        radius: f64,
+    },
+    BubbleColumn {
+        x: f64, y: f64, z: f64,
+        height: i32,
+    },
+    Geyser {
+        x: f64, y: f64, z: f64,
+        water_columns: i32,
+        geyser_type: GeyserType,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GeyserType {
+    /// Magma-powered: random interval eruptions, launches entities upward
+    MagmaRandom,
+    /// Lava-powered: continuous eruption, quieter
+    Continuous,
+}

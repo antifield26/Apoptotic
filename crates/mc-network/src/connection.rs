@@ -1088,7 +1088,7 @@ async fn handle_play(
                 is_baby: false,
                 in_love_ticks: 0,
                 breed_cooldown: 0,
-                is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
             };
             server.mob_manager.register(tracked);
         }
@@ -1324,7 +1324,7 @@ async fn stream_new_chunks(
                     is_baby: false,
                     in_love_ticks: 0,
                     breed_cooldown: 0,
-                    is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                    is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
                 };
                 server.mob_manager.register(tracked);
             }
@@ -2175,9 +2175,88 @@ async fn play_loop(
                         let z = f64::from_be_bytes(payload[16..24].try_into().unwrap_or([0;8]));
                         let yaw = f32::from_be_bytes(payload[24..28].try_into().unwrap_or([0;4]));
                         let pitch = f32::from_be_bytes(payload[28..32].try_into().unwrap_or([0;4]));
+                        // 26.2: Sculk Sensor — entity step vibration (freq 1)
+                        let step_x = x.floor() as i32;
+                        let step_y = y.floor() as i32;
+                        let step_z = z.floor() as i32;
+                        let old_step = server.player_manager.get(&_uuid)
+                            .map(|p| (p.position.x.floor() as i32, p.position.y.floor() as i32, p.position.z.floor() as i32));
+                        if old_step.map_or(true, |(ox, oy, oz)| ox != step_x || oy != step_y || oz != step_z) {
+                            mc_world::redstone::register_vibration(step_x, step_y, step_z, 1);
+                        }
+                        // Track old/new chunk for spatial index
+                        let old_cx = server.player_manager.get(&_uuid)
+                            .map(|p| (p.position.x.floor() as i32).div_euclid(16))
+                            .unwrap_or(0);
+                        let old_cz = server.player_manager.get(&_uuid)
+                            .map(|p| (p.position.z.floor() as i32).div_euclid(16))
+                            .unwrap_or(0);
                         let _ = server.player_manager.update_position_full(&_uuid, x, y, z, yaw, pitch);
+                        let new_cx = (x.floor() as i32).div_euclid(16);
+                        let new_cz = (z.floor() as i32).div_euclid(16);
+                        if old_cx != new_cx || old_cz != new_cz {
+                            server.player_manager.update_player_chunk(&_uuid, old_cx, old_cz, new_cx, new_cz);
+                        }
                         if let Some(eid) = server.player_manager.get_entity_id(&_uuid) {
                             server.player_manager.broadcast_entity_move(eid, _uuid, x, y, z, yaw, pitch);
+                        }
+                        // ── Boot enchantment effects ──
+                        let (fw_level, ss_level, sws_level) = server.player_manager.get_boot_enchant_levels(&_uuid);
+                        // Frost Walker: freeze water blocks around player's feet
+                        if fw_level > 0 {
+                            let radius = (fw_level as i32 + 1).min(4);
+                            for dx in -radius..=radius {
+                                for dz in -radius..=radius {
+                                    let d = ((dx*dx + dz*dz) as f64).sqrt();
+                                    if d <= radius as f64 {
+                                        let bx = (x.floor() as i32) + dx;
+                                        let bz = (z.floor() as i32) + dz;
+                                        let by = (y.floor() as i32) - 1;
+                                        let cp = mc_core::position::ChunkPos::new(bx >> 4, bz >> 4);
+                                        if let Some(mut ch) = server.chunk_store.get_mut(&cp)
+                                            && (-64..=319).contains(&by) {
+                                                let block = ch.get_block((bx & 0xF) as usize, by, (bz & 0xF) as usize);
+                                                if block.id == 267 { // water
+                                                    // Replace water with frosted_ice (ID 1055 — frosted ice)
+                                                    ch.set_block((bx & 0xF) as usize, by, (bz & 0xF) as usize,
+                                                        mc_core::block::BlockState::new(1055));
+                                                    server.dirty_blocks.mark_block(bx, by, bz, 1055);
+                                                } else if block.id == 1055 && d >= radius as f64 - 0.5 {
+                                                    // Keep frosted ice near center, let edges melt
+                                                }
+                                            }
+                                    }
+                                }
+                            }
+                        }
+                        // Soul Speed: boost on soul sand/soil
+                        if ss_level > 0 {
+                            let bx = (x.floor() as i32);
+                            let bz = (z.floor() as i32);
+                            let by = (y.floor() as i32) - 1;
+                            let cp = mc_core::position::ChunkPos::new(bx >> 4, bz >> 4);
+                            let on_soul = server.chunk_store.get(&cp)
+                                .map(|ch| {
+                                    let bid = ch.get_block((bx & 0xF) as usize, by, (bz & 0xF) as usize).id;
+                                    bid == 961 || bid == 962 // soul_sand, soul_soil
+                                }).unwrap_or(false);
+                            if on_soul {
+                                let _ = server.player_manager.set_speed_multiplier(&_uuid,
+                                    1.0 + 0.155 * ss_level as f32);
+                                // Durability damage to boots (probability-based)
+                                if fastrand::u32(..).is_multiple_of(4) {
+                                    let _ = server.player_manager.damage_boots(&_uuid, 1);
+                                }
+                            }
+                        }
+                        // Swift Sneak: faster movement while sneaking
+                        if sws_level > 0 {
+                            let is_sneaking = server.player_manager.get(&_uuid)
+                                .map(|p| p.is_sneaking).unwrap_or(false);
+                            if is_sneaking {
+                                let _ = server.player_manager.set_speed_multiplier(&_uuid,
+                                    0.3 + 0.15 * sws_level as f32);
+                            }
                         }
                         // Item pickup: check for nearby dropped items
                         {
@@ -2269,6 +2348,8 @@ async fn play_loop(
                                     server.dirty_chunks_broadcast.write().insert(cp);
                                     // Also mark for immediate UpdateSectionBlocks broadcast
                                     server.dirty_blocks.mark_block(x, y, z, mc_core::block::BlockState::AIR.id);
+                                    // 26.2: Register Sculk Sensor vibration (block break = freq 3)
+                                    mc_world::redstone::register_vibration(x, y, z, 3);
                                     // Propagate lighting to adjacent chunks
                                     mc_world::lighting::propagate_lighting_cross_chunk(
                                         &server.chunk_store, &cp, (x & 0xF) as usize, y, (z & 0xF) as usize, true);
@@ -2394,6 +2475,22 @@ async fn play_loop(
                                 let _ = send_packet(io, &set_content).await;
                                 debug!("Opened container at ({}, {}, {}) for {}", x, y, z, username);
                                 continue;
+                            }
+                            // 26.2: Daylight Detector toggle (right-click to invert)
+                            if target_block.id == mc_world::redstone::DAYLIGHT_DETECTOR_ID {
+                                let inverted = mc_world::redstone::toggle_daylight_detector(x, y, z);
+                                // Send block update to client for visual feedback
+                                let update = BlockUpdate {
+                                    x, y, z: z, block_id: target_block.id as i32,
+                                };
+                                let _ = send_packet(io, &update).await;
+                                info!("{} toggled daylight detector at ({}, {}, {}) — {}",
+                                    username, x, y, z, if inverted { "inverted" } else { "normal" });
+                                continue;
+                            }
+                            // 26.2: Lightning Rod — no toggle, just visual (struck externally)
+                            if target_block.id == mc_world::redstone::LIGHTNING_ROD_ID {
+                                continue; // Lightning rod has no GUI or right-click action
                             }
                             // Honeycomb waxing: right-click copper with honeycomb to prevent oxidation
                             let held_id = server.player_manager.get_held_item(&_uuid).map(|i| i.item.id).unwrap_or(0);
@@ -2592,6 +2689,8 @@ async fn play_loop(
                             .unwrap_or_else(|| mc_core::block::BlockState::new(1));
                         if let Some(mut chunk) = server.chunk_store.get_mut(&cp) {
                             chunk.set_block((x & 0xF) as usize, y, (z & 0xF) as usize, block);
+                            // 26.2: Sculk Sensor vibration (block place = freq 2)
+                            mc_world::redstone::register_vibration(x, y, z, 2);
                             if mc_world::lighting::is_opaque(block) {
                                 mc_world::lighting::recalc_sky_light_on_place(&mut chunk, (x & 0xF) as usize, y, (z & 0xF) as usize);
                             }
@@ -2797,6 +2896,9 @@ async fn play_loop(
                             };
                             server.mob_manager.projectiles.insert(ceid, proj);
                         }
+                        // ShotCrossbow advancement
+                        fire_advancement(server, io, &_uuid,
+                            &mc_player::advancement::Criterion::ShotCrossbow).await;
                     }
                     // Trident (940): throw trident
                     940 => {
@@ -3192,6 +3294,40 @@ async fn play_loop(
                                 let _ = send_packet(io, &hurt_sound).await;
                                 if let Some(hp) = new_health
                                     && hp <= 0.0 {
+                                        // ── 26.2 Sulfur Cube: split into 2 small cubes ──
+                                        if mob.mob_type == mc_core::constants::entity_type::SULFUR_CUBE {
+                                            // Explosive archetype: no small cubes, just explosion
+                                            if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { .. }) = mob.sulfur_cube_archetype {
+                                                // Remove without splitting
+                                                let remove = RemoveEntities { entity_ids: vec![target_entity_id] };
+                                                let _ = send_packet(io, &remove).await;
+                                                server.mob_manager.remove(target_entity_id);
+                                                server.player_manager.broadcast_mob_despawn(target_entity_id, mob.uuid);
+                                            } else {
+                                                // Split into 2 small cubes
+                                                let remove = RemoveEntities { entity_ids: vec![target_entity_id] };
+                                                let _ = send_packet(io, &remove).await;
+                                                server.mob_manager.remove(target_entity_id);
+                                                // Spawn 2 small cubes
+                                                let small1_eid = server.mob_manager.sulfur_cube_spawn_small(&mob, &server.next_entity_id);
+                                                let small2_eid = server.mob_manager.sulfur_cube_spawn_small(&mob, &server.next_entity_id);
+                                                // Send spawn packets for both
+                                                for &eid in &[small1_eid, small2_eid] {
+                                                    let _ = send_packet(io, &SpawnEntity {
+                                                        entity_id: eid, entity_uuid: uuid::Uuid::new_v4(),
+                                                        entity_type: mc_core::constants::entity_type::SULFUR_CUBE,
+                                                        x: mob.position.x + (fastrand::f64() - 0.5) * 1.0,
+                                                        y: mob.position.y, z: mob.position.z + (fastrand::f64() - 0.5) * 1.0,
+                                                        pitch: 0, yaw: 0, head_yaw: 0, data: 0,
+                                                        vel_x: ((fastrand::f64() - 0.5) * 300.0) as i16,
+                                                        vel_y: 300, vel_z: ((fastrand::f64() - 0.5) * 300.0) as i16,
+                                                    }).await;
+                                                }
+                                                server.player_manager.broadcast_mob_despawn(target_entity_id, mob.uuid);
+                                                info!("Sulfur Cube split into 2 small cubes (eid={}, {})", small1_eid, small2_eid);
+                                            }
+                                            continue; // skip normal death handling
+                                        }
                                         // Mob died — remove entity, spawn drops + XP
                                         let remove = RemoveEntities { entity_ids: vec![target_entity_id] };
                                         let _ = send_packet(io, &remove).await;
@@ -3319,7 +3455,7 @@ async fn play_loop(
                                                 ai_state: mc_player::mob::MobAiState::Idle,
                                                 attack_cooldown: 0, last_sync_tick: 0,
                                                 owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0,
-                                                is_baby: true, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0,
+                                                is_baby: true, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
                                             };
                                             server.mob_manager.register(baby);
                                             // Spawn baby entity packet
@@ -3358,10 +3494,14 @@ async fn play_loop(
                                     }
                                     info!("Player '{}' sheared sheep ({} wool)", username, wool_count);
                                 }
-                                // Villager trading: open GUI on right-click
-                                if mob.mob_type == 92 {
+                                // Villager + Wandering Trader trading: open GUI on right-click
+                                if mob.mob_type == 92 || mob.mob_type == mc_core::constants::entity_type::WANDERING_TRADER {
                                     let window_id = server.container_manager.open(&_uuid, (-1, -1, -1), 3);
                                     let _ = send_packet(io, &OpenScreen { window_id: window_id as i32, window_type: 14, title: "\"Villager\"".into() }).await;
+                                    // Record gossip for trading
+                                    if mob.mob_type == 92 {
+                                        mc_player::villager::record_trade(target_entity_id, _uuid);
+                                    }
                                     let offers = mc_player::villager::get_trade_offers(0);
                                     let trades: Vec<TradeOffer> = offers.iter().take(5).map(|o| {
                                         TradeOffer {
@@ -3416,6 +3556,100 @@ async fn play_loop(
                                         holding_id: target_entity_id,
                                     };
                                     let _ = send_packet(io, &link).await;
+                                }
+                                // ═══ 26.2 Sulfur Cube interactions ═══
+                                // Sulfur Cube (131): block absorption, shearing, bucket, slimeball
+                                if mob.mob_type == mc_core::constants::entity_type::SULFUR_CUBE {
+                                    // Shears (845): remove absorbed block, re-enable AI
+                                    if held_id == 845 {
+                                        if let Some(dropped_block) = server.mob_manager.sulfur_cube_shear(target_entity_id) {
+                                            // Spawn dropped block item
+                                            let item_eid = server.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                            let _ = send_packet(io, &SpawnEntity {
+                                                entity_id: item_eid, entity_uuid: uuid::Uuid::new_v4(),
+                                                entity_type: 54, // item entity
+                                                x: mob.position.x, y: mob.position.y + 0.5, z: mob.position.z,
+                                                pitch: 0, yaw: 0, head_yaw: 0,
+                                                data: dropped_block as i32,
+                                                vel_x: ((fastrand::f64() - 0.5) * 200.0) as i16,
+                                                vel_y: 200,
+                                                vel_z: ((fastrand::f64() - 0.5) * 200.0) as i16,
+                                            }).await;
+                                            info!("Player '{}' sheared Sulfur Cube (block {})", username, dropped_block);
+                                        } else {
+                                            debug!("Player '{}' attempted to shear unshearable Sulfur Cube", username);
+                                        }
+                                    }
+                                    // Bucket (891): scoop up large Sulfur Cube
+                                    else if held_id == 891 {
+                                        if server.mob_manager.sulfur_cube_bucket(target_entity_id) {
+                                            // Give Bucket of Sulfur Cube to player
+                                            let bucket_cube = mc_core::block::BlockState::new(1271); // Bucket of Sulfur Cube
+                                            let _ = server.player_manager.add_item_to_player(&_uuid, bucket_cube, 1);
+                                            // Remove entity
+                                            let remove = RemoveEntities { entity_ids: vec![target_entity_id] };
+                                            let _ = send_packet(io, &remove).await;
+                                            info!("Player '{}' bucketed Sulfur Cube", username);
+                                        }
+                                    }
+                                    // Slimeball (894): feed small cube to grow
+                                    else if held_id == 894 && mob.is_small_cube {
+                                        if server.mob_manager.sulfur_cube_feed_slimeball(target_entity_id) {
+                                            let _ = send_packet(io, &Particle {
+                                                particle_id: 12, long_distance: false, // heart particles
+                                                x: mob.position.x, y: mob.position.y + 1.0, z: mob.position.z,
+                                                offset_x: 0.3, offset_y: 0.3, offset_z: 0.3,
+                                                max_speed: 0.05, count: 5,
+                                            }).await;
+                                            info!("Player '{}' fed slimeball to small Sulfur Cube — grew to large!", username);
+                                        }
+                                    }
+                                    // Feed block: absorb into Sulfur Cube, set archetype
+                                    else if held_id != 0 && !mob.is_small_cube
+                                        && mob.sulfur_cube_archetype.is_none() {
+                                        if let Some(archetype) = server.mob_manager.sulfur_cube_absorb(target_entity_id, held_id) {
+                                            // Remove one item from player's hand
+                                            let _ = server.player_manager.remove_item_from_slot(
+                                                &_uuid,
+                                                server.player_manager.get_held_slot(&_uuid).unwrap_or(0),
+                                                mc_core::block::BlockState::new(held_id),
+                                                1,
+                                            );
+                                            // Explosive archetype special handling
+                                            if let mc_player::mob::SulfurCubeArchetype::Explosive { .. } = archetype {
+                                                // "Uh Oh" advancement
+                                                fire_advancement(server, io, &_uuid,
+                                                    &mc_player::advancement::Criterion::UhOh).await;
+                                                info!("Player '{}' fed TNT to Sulfur Cube — \"Uh Oh\"!", username);
+                                            }
+                                            // Send metadata update
+                                            let mut meta_bytes = Vec::new();
+                                            meta_bytes.push(17); // index 17 = custom archetype visual
+                                            meta_bytes.push(3);  // type 3 = varint
+                                            let arch_idx = match archetype {
+                                                mc_player::mob::SulfurCubeArchetype::Regular => 0,
+                                                mc_player::mob::SulfurCubeArchetype::Bouncy => 1,
+                                                mc_player::mob::SulfurCubeArchetype::SlowBouncy => 2,
+                                                mc_player::mob::SulfurCubeArchetype::SlowFlat => 3,
+                                                mc_player::mob::SulfurCubeArchetype::FastFlat => 4,
+                                                mc_player::mob::SulfurCubeArchetype::Light => 5,
+                                                mc_player::mob::SulfurCubeArchetype::FastSliding => 6,
+                                                mc_player::mob::SulfurCubeArchetype::SlowSliding => 7,
+                                                mc_player::mob::SulfurCubeArchetype::HighResistance => 8,
+                                                mc_player::mob::SulfurCubeArchetype::Sticky => 9,
+                                                mc_player::mob::SulfurCubeArchetype::Explosive { .. } => 10,
+                                                mc_player::mob::SulfurCubeArchetype::Hot => 11,
+                                            };
+                                            meta_bytes.extend_from_slice(&mc_protocol::codec::write_varint_bytes(arch_idx));
+                                            meta_bytes.push(0xFF);
+                                            let _ = send_packet(io, &SetEntityMetadata {
+                                                entity_id: target_entity_id,
+                                                metadata: meta_bytes,
+                                            }).await;
+                                            info!("Player '{}' fed block {} to Sulfur Cube → archetype {:?}",
+                                                username, held_id, archetype);
+                                        }
+                                    }
                                 }
                             }
                     }
@@ -4228,6 +4462,9 @@ async fn play_loop(
                         continue;
                     }
                     debug!("{} selected villager trade slot {}", username, slot);
+                    // Fire VillagerTrade advancement
+                    fire_advancement(server, io, &_uuid,
+                        &mc_player::advancement::Criterion::VillagerTrade).await;
                 }
             }
             // LockDifficulty (0x10) — OP locks world difficulty

@@ -48,6 +48,15 @@ impl BeaconData {
 /// 信标管理器
 pub struct BeaconManager {
     pub beacons: HashMap<(i32, i32, i32), BeaconData>,
+    pub newly_activated: bool,
+}
+
+impl BeaconManager {
+    pub fn has_newly_activated(&mut self) -> bool {
+        let v = self.newly_activated;
+        self.newly_activated = false;
+        v
+    }
 }
 
 impl Default for BeaconManager {
@@ -58,7 +67,7 @@ impl Default for BeaconManager {
 
 impl BeaconManager {
     pub fn new() -> Self {
-        Self { beacons: HashMap::new() }
+        Self { beacons: HashMap::new(), newly_activated: false }
     }
 
     /// 获取或创建信标
@@ -163,8 +172,12 @@ impl BeaconManager {
         player_manager: &crate::player::PlayerManager,
     ) {
         for (pos, beacon) in self.beacons.iter_mut() {
-            // 重新检测金字塔
+            let old_level = beacon.pyramid_level;
             beacon.pyramid_level = Self::detect_pyramid(chunk_store, pos.0, pos.1, pos.2);
+            // Track newly activated beacons
+            if old_level == 0 && beacon.pyramid_level > 0 && beacon.payment_item.is_some() {
+                self.newly_activated = true;
+            }
 
             if beacon.pyramid_level == 0 { continue; }
             if beacon.payment_item.is_none() { continue; }
