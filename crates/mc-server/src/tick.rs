@@ -788,6 +788,7 @@ pub fn tick_wandering_trader(
 }
 
 /// Wandering Trader trade offers (6 random trades from pool)
+#[allow(dead_code)]
 pub fn wandering_trader_trades() -> Vec<(u32, u8, u32, u8, i32, i32)> {
     // (input_item, input_count, output_item, output_count, max_uses, xp)
     let pool: &[(u32, u8, u32, u8, i32, i32)] = &[

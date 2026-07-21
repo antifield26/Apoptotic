@@ -513,14 +513,14 @@ fn load_linear_file(path: &Path) -> std::io::Result<Chunk> {
 // On Linux, jemalloc metadata_thp:always ensures THP for this allocation.
 std::thread_local! {
     static SERIALIZE_SCRATCH: std::cell::RefCell<Vec<u8>> = std::cell::RefCell::new({
-        let mut v = Vec::with_capacity(65536);
+        let v = Vec::with_capacity(65536);
         // D1: hint the OS to use hugepages for this frequently-used buffer
         #[cfg(target_os = "linux")]
-        unsafe {
-            let ptr = v.as_mut_ptr();
+        {
+            let ptr = v.as_ptr();
             let len = v.capacity();
             // madvise MADV_HUGEPAGE — suggest transparent hugepage for this region
-            libc::madvise(ptr as *mut libc::c_void, len, libc::MADV_HUGEPAGE);
+            unsafe { libc::madvise(ptr as *mut libc::c_void, len, libc::MADV_HUGEPAGE); }
         }
         v
     });

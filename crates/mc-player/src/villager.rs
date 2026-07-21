@@ -337,7 +337,7 @@ pub struct GossipManager {
 impl GossipManager {
     pub fn new() -> Self { Self { villager_gossips: dashmap::DashMap::new() } }
 
-    pub fn get_or_create(&self, entity_id: i32) -> dashmap::mapref::one::RefMut<i32, VillagerGossip> {
+    pub fn get_or_create(&self, entity_id: i32) -> dashmap::mapref::one::RefMut<'_, i32, VillagerGossip> {
         self.villager_gossips.entry(entity_id).or_insert_with(VillagerGossip::new)
     }
 

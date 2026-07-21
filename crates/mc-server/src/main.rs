@@ -963,10 +963,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let spawned = tick::tick_wandering_trader(tick_count, &player_manager, &mob_manager, &next_entity_id_for_tick, &chunk_store);
                     for (eid, mob_type, x, y, z) in &spawned {
                         // Send spawn packet to all players
-                        for player in player_manager.all_players() {
+                        for _player in player_manager.all_players() {
                             let _ = {
                                 use mc_protocol::packets::play::SpawnEntity;
-                                let pkt = SpawnEntity {
+                                let _pkt = SpawnEntity {
                                     entity_id: *eid, entity_uuid: uuid::Uuid::new_v4(),
                                     entity_type: *mob_type,
                                     x: *x, y: *y, z: *z,
@@ -1355,7 +1355,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // 26.2: Sulfur Cube Explosive archetype — redstone/fire priming + detonation
                     if mob.mob_type == mc_core::constants::entity_type::SULFUR_CUBE {
                         // Check for fire/redstone priming
-                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks, primed }) = mob.sulfur_cube_archetype {
+                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks: _, primed }) = mob.sulfur_cube_archetype {
                             if !primed {
                                 let mx = mob.position.x as i32; let my = mob.position.y as i32; let mz = mob.position.z as i32;
                                 let mut should_prime = false;
@@ -1499,7 +1499,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Weaving (36): places cobwebs at death location
                         if player_manager.get_effect_level(uuid, 36) > 0 {
                             let amp = player_manager.get_effect_level(uuid, 36) as i32;
-                            let cp = mc_core::position::ChunkPos::new(pos.0 as i32 >> 4, pos.2 as i32 >> 4);
+                            let _cp = mc_core::position::ChunkPos::new(pos.0 as i32 >> 4, pos.2 as i32 >> 4);
                             let cobweb = mc_core::block::BlockState::new(100); // cobweb block ID
                             for _ in 0..(2 + amp) {
                                 let cx = (pos.0 as i32 + fastrand::i32(-2..=2)).clamp(-30000000, 29999999);

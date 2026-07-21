@@ -2255,8 +2255,8 @@ async fn play_loop(
                         }
                         // Soul Speed: boost on soul sand/soil
                         if ss_level > 0 {
-                            let bx = (x.floor() as i32);
-                            let bz = (z.floor() as i32);
+                            let bx = x.floor() as i32;
+                            let bz = z.floor() as i32;
                             let by = (y.floor() as i32) - 1;
                             let cp = mc_core::position::ChunkPos::new(bx >> 4, bz >> 4);
                             let on_soul = server.chunk_store.get(&cp)

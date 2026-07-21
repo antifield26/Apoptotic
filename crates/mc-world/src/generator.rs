@@ -1408,7 +1408,7 @@ fn place_pillager_outpost(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn
                 let lz = (center_z as i32 + dz) as usize;
                 if lx >= 16 || lz >= 16 { continue; }
                 let is_edge = dx == -2 || dx == 2 || dz == -2 || dz == 2;
-                let is_corner = (dx.abs() == 2 && dz.abs() == 2);
+                let is_corner = dx.abs() == 2 && dz.abs() == 2;
                 let block = if dy < 4 {
                     if is_edge { cobble } else { continue; }
                 } else if dy < 8 {

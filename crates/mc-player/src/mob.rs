@@ -864,7 +864,7 @@ impl MobManager {
                         }
                         // Hunt chickens/rabbits at night
                         let mut hunted = false;
-                        if let Some(pm) = player_manager {
+                        if let Some(_pm) = player_manager {
                             // Jump-pounce: high arc attack
                             if fastrand::bool() {
                                 mob.position.y += 1.5;
@@ -902,7 +902,7 @@ impl MobManager {
                     }
                     // Wolf (95): autonomous hunt + pack behavior (tamed handling in interact)
                     if mob.mob_type == 95 && !mob.is_tamed && mob.age_ticks % 50 == 0
-                        && let Some(pm) = player_manager {
+                        && let Some(_pm) = player_manager {
                             // Hunt small prey (chickens, rabbits) autonomously
                             if fastrand::bool() {
                                 let angle = fastrand::f64() * std::f64::consts::TAU;
