@@ -70,6 +70,10 @@ fn register_commands(dispatcher: &mut CommandDispatcher) {
     dispatcher.register(BanlistCommand);
     dispatcher.register(WhitelistCommand);
     dispatcher.register(SaveAllCommand);
+    dispatcher.register(AdvancementCommand); // B8
+    dispatcher.register(ScheduleCommand);    // B8
+    dispatcher.register(FunctionCommand);    // E4
+    dispatcher.register(DatapackCommand);    // E4
     dispatcher.register(ReloadCommand);
     dispatcher.register(TransferCommand);
     dispatcher.register(GamemodeCommand);

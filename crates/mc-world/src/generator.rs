@@ -945,6 +945,8 @@ impl TerrainGenerator for NetherGenerator {
             }
         }
         place_nether_fortress(&mut chunk, pos, seed);
+        // B4: Bastion remnant in nether
+        place_bastion_remnant(&mut chunk, pos, seed);
         crate::lighting::init_chunk_lighting(&mut chunk);
         chunk.dirty = false;
         chunk
@@ -1377,6 +1379,208 @@ fn place_sulfur_springs(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: 
     }
 }
 
+// ═══ B4: 5 new structures ═══
+
+/// Pillager Outpost — generates in plains/desert/taiga biomes
+fn place_pillager_outpost(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: &dyn Fn(i32, i32) -> i32) {
+    let cx = pos.x * 16; let cz = pos.z * 16;
+    let biome = sample_biome(cx + 8, cz + 8, seed);
+    if !matches!(biome, mc_core::biome::BiomeId::Plains | mc_core::biome::BiomeId::Desert | mc_core::biome::BiomeId::Taiga | mc_core::biome::BiomeId::SnowyTaiga) { return; }
+    let hash = (cx as u64).wrapping_mul(0xCBF29CE4).wrapping_add((cz as u64).wrapping_mul(0x84222325)).wrapping_add(seed);
+    if hash % 311 != 0 { return; } // ~0.32% chance
+
+    let center_x = ((hash >> 8) % 13 + 1) as usize;
+    let center_z = ((hash >> 16) % 13 + 1) as usize;
+    let surface_y = height_fn(cx + center_x as i32, cz + center_z as i32);
+    if !(63..=280).contains(&surface_y) { return; }
+
+    let dark_oak = BlockState::new(85);   // dark oak planks
+    let cobble = BlockState::new(4);      // cobblestone
+    let dark_oak_log = BlockState::new(53); // dark oak log
+    let fence = BlockState::new(640);     // dark oak fence
+    // Build a 3-story tower with cobblestone base + dark oak top
+    for dy in 0..12 {
+        let wy = surface_y + dy;
+        if !(0..=319).contains(&wy) { continue; }
+        for dx in -2i32..=2 {
+            for dz in -2i32..=2 {
+                let lx = (center_x as i32 + dx) as usize;
+                let lz = (center_z as i32 + dz) as usize;
+                if lx >= 16 || lz >= 16 { continue; }
+                let is_edge = dx == -2 || dx == 2 || dz == -2 || dz == 2;
+                let is_corner = (dx.abs() == 2 && dz.abs() == 2);
+                let block = if dy < 4 {
+                    if is_edge { cobble } else { continue; }
+                } else if dy < 8 {
+                    if is_corner { dark_oak_log } else if is_edge { dark_oak } else { continue; }
+                } else {
+                    if is_corner { fence } else if is_edge { dark_oak } else { continue; }
+                };
+                chunk.set_block(lx, wy, lz, block);
+            }
+        }
+    }
+}
+
+/// Woodland Mansion — generates in dark forest biome
+fn place_woodland_mansion(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: &dyn Fn(i32, i32) -> i32) {
+    let cx = pos.x * 16; let cz = pos.z * 16;
+    let biome = sample_biome(cx + 8, cz + 8, seed);
+    if biome != mc_core::biome::BiomeId::DarkForest { return; }
+    let hash = (cx as u64).wrapping_mul(0xAF63D42C).wrapping_add((cz as u64).wrapping_mul(0x14057B7E)).wrapping_add(seed);
+    if hash % 1201 != 0 { return; } // rare — ~0.083%
+
+    let center_x = ((hash >> 10) % 8 + 4) as usize;
+    let center_z = ((hash >> 20) % 8 + 4) as usize;
+    let surface_y = height_fn(cx + center_x as i32, cz + center_z as i32);
+    if !(63..=280).contains(&surface_y) { return; }
+
+    let dark_oak = BlockState::new(85);
+    let dark_oak_log = BlockState::new(53);
+    let cobble = BlockState::new(4);
+    let planks = BlockState::new(17);
+    // Large 2-story building: 8x10 footprint, 2 floors
+    for dx in -4i32..=4 {
+        for dz in -5i32..=5 {
+            let lx = (center_x as i32 + dx) as usize;
+            let lz = (center_z as i32 + dz) as usize;
+            if lx >= 16 || lz >= 16 { continue; }
+            let is_exterior = dx.abs() == 4 || dz.abs() == 5;
+            let is_corner = dx.abs() == 4 && dz.abs() == 5;
+            for dy in 0..10 {
+                let wy = surface_y + dy;
+                if !(0..=319).contains(&wy) { continue; }
+                let block = if dy == 0 {
+                    if is_exterior { cobble } else { planks } // foundation
+                } else if dy < 5 {
+                    if is_corner { dark_oak_log } else if is_exterior { dark_oak } else { continue; } // 1st floor walls
+                } else if dy == 5 {
+                    planks // floor
+                } else {
+                    if is_corner { dark_oak_log } else if is_exterior { dark_oak } else { continue; } // 2nd floor walls
+                };
+                chunk.set_block(lx, wy, lz, block);
+            }
+        }
+    }
+}
+
+/// Bastion Remnant — generates in all nether biomes
+fn place_bastion_remnant(chunk: &mut Chunk, _pos: ChunkPos, seed: u64) {
+    let cx = _pos.x * 16; let cz = _pos.z * 16;
+    let biome = sample_biome(cx + 8, cz + 8, seed);
+    if !matches!(biome, mc_core::biome::BiomeId::NetherWastes | mc_core::biome::BiomeId::CrimsonForest | mc_core::biome::BiomeId::SoulSandValley | mc_core::biome::BiomeId::WarpedForest | mc_core::biome::BiomeId::BasaltDeltas) { return; }
+    let hash = (cx as u64).wrapping_mul(0x517CC1B7).wrapping_add((cz as u64).wrapping_mul(0x8ABE6A01)).wrapping_add(seed);
+    if hash % 211 != 0 { return; } // ~0.47%
+
+    let center_x: usize = ((hash >> 8) % 10 + 3) as usize;
+    let center_z: usize = ((hash >> 16) % 10 + 3) as usize;
+    let blackstone = BlockState::new(880);    // blackstone
+    let gilded = BlockState::new(819);         // gilded blackstone
+    let gold = BlockState::new(83);            // gold block
+    let lava = BlockState::new(36);
+    // Bastion: fortress-like platform with gold center
+    for dx in -4i32..=4 {
+        for dz in -4i32..=4 {
+            let lx = (center_x as i32 + dx) as usize;
+            let lz = (center_z as i32 + dz) as usize;
+            if lx >= 16 || lz >= 16 { continue; }
+            let dist = ((dx*dx + dz*dz) as f64).sqrt();
+            let base_y = 35 + ((hash >> 4) % 4) as i32;
+            for dy in 0..=3 {
+                let wy = base_y + dy;
+                if !(0..=127).contains(&wy) { continue; }
+                let block = if dist <= 1.5 && dy == 0 {
+                    gold // center treasure
+                } else if dist <= 2.5 && dy == 0 {
+                    gilded
+                } else if dist <= 4.0 {
+                    if (dx.abs() + dz.abs()) % 3 == 0 { gilded } else { blackstone }
+                } else {
+                    continue;
+                };
+                chunk.set_block(lx, wy, lz, block);
+            }
+            // Occasional lava pools
+            if dist <= 1.5 && fastrand::u32(..).is_multiple_of(4) {
+                chunk.set_block(lx, base_y - 1, lz, lava);
+            }
+        }
+    }
+}
+
+/// Fossil — generates underground in desert/swamp biomes
+fn place_fossil(chunk: &mut Chunk, pos: ChunkPos, seed: u64, _height_fn: &dyn Fn(i32, i32) -> i32) {
+    let cx = pos.x * 16; let cz = pos.z * 16;
+    let biome = sample_biome(cx + 8, cz + 8, seed);
+    if !matches!(biome, mc_core::biome::BiomeId::Desert | mc_core::biome::BiomeId::Swamp) { return; }
+    let hash = (cx as u64).wrapping_mul(0x9e3779b9).wrapping_add((cz as u64).wrapping_mul(0xdeadbeef)).wrapping_add(seed);
+    if hash % 317 != 0 { return; } // ~0.32%
+
+    let bone = BlockState::new(678); // bone block
+    let center_x: usize = ((hash >> 8) % 12 + 2) as usize;
+    let center_z: usize = ((hash >> 16) % 8 + 4) as usize;
+    let y = 15 + ((hash >> 4) % 25) as i32; // deep underground (Y 15-40)
+    // Horizontal ribcage shape: spine + ribs
+    for dx in -3i32..=3 {
+        let lx = (center_x as i32 + dx) as usize;
+        if lx >= 16 { continue; }
+        // Spine (horizontal line)
+        chunk.set_block(lx, y, center_z, bone);
+        // Ribs (vertical from spine, alternating sides)
+        if dx.abs() == 1 || dx.abs() == 3 {
+            for dz in -2i32..=-1 {
+                let lz = (center_z as i32 + dz) as usize;
+                if lz < 16 { chunk.set_block(lx, y, lz, bone); }
+            }
+        }
+        if dx.abs() == 2 {
+            for dz in 1i32..=2 {
+                let lz = (center_z as i32 + dz) as usize;
+                if lz < 16 { chunk.set_block(lx, y, lz, bone); }
+            }
+        }
+    }
+}
+
+/// Trail Ruins — generates buried in taiga/jungle/snowy biomes
+fn place_trail_ruins(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: &dyn Fn(i32, i32) -> i32) {
+    let cx = pos.x * 16; let cz = pos.z * 16;
+    let biome = sample_biome(cx + 8, cz + 8, seed);
+    if !matches!(biome, mc_core::biome::BiomeId::Taiga | mc_core::biome::BiomeId::OldGrowthPineTaiga | mc_core::biome::BiomeId::OldGrowthSpruceTaiga |
+                  mc_core::biome::BiomeId::Jungle | mc_core::biome::BiomeId::SnowyTaiga) { return; }
+    let hash = (cx as u64).wrapping_mul(0x6B8E3F1A).wrapping_add((cz as u64).wrapping_mul(0xD2A70C9B)).wrapping_add(seed);
+    if hash % 277 != 0 { return; } // ~0.36%
+
+    let center_x: usize = ((hash >> 8) % 12 + 2) as usize;
+    let center_z: usize = ((hash >> 16) % 10 + 3) as usize;
+    let surface_y = height_fn(cx + center_x as i32, cz + center_z as i32);
+    let y = (surface_y - 2 - (hash as i32 % 4)).clamp(50, 250);
+    let gravel = BlockState::new(40);       // gravel
+    let mud_brick = BlockState::new(764);    // mud bricks
+    let terracotta = BlockState::new(583);   // terracotta
+    // Buried structure: lines of gravel + mud bricks + occasional terracotta
+    for dx in -3i32..=3 {
+        let lx = (center_x as i32 + dx) as usize;
+        if lx >= 16 { continue; }
+        for dz in -2i32..=2 {
+            let lz = (center_z as i32 + dz) as usize;
+            if lz >= 16 { continue; }
+            let is_suspicious = (dx + dz) % 3 == 0;
+            for dy in -1..=0 {
+                let wy = y + dy;
+                if !(0..=319).contains(&wy) { continue; }
+                let block = if dy == 0 {
+                    if is_suspicious { gravel } else { mud_brick }
+                } else {
+                    if (dx.abs() + dz.abs()) % 2 == 0 { terracotta } else { gravel }
+                };
+                chunk.set_block(lx, wy, lz, block);
+            }
+        }
+    }
+}
+
 /// Perlin 噪声地形生成器 (使用 noise crate — 3D Perlin + 分形)
 /// PermutationTable 通过线程局部缓存复用
 pub struct NoiseGenerator {
@@ -1484,6 +1688,11 @@ impl TerrainGenerator for NoiseGenerator {
         place_trial_chambers(&mut chunk, pos, seed);
         place_ancient_city(&mut chunk, pos, seed);
         place_sulfur_springs(&mut chunk, pos, seed, &|wx, wz| self.height_at(wx, wz, &terrain_hasher));
+        // B4: 5 new structures
+        place_pillager_outpost(&mut chunk, pos, seed, &|wx, wz| self.height_at(wx, wz, &terrain_hasher));
+        place_woodland_mansion(&mut chunk, pos, seed, &|wx, wz| self.height_at(wx, wz, &terrain_hasher));
+        place_fossil(&mut chunk, pos, seed, &|wx, wz| self.height_at(wx, wz, &terrain_hasher));
+        place_trail_ruins(&mut chunk, pos, seed, &|wx, wz| self.height_at(wx, wz, &terrain_hasher));
 
         for section in chunk.sections.iter_mut().flatten() {
             fill_section_biomes(&mut section.biomes, section.position.y, pos.x, pos.z, seed);

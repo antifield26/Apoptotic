@@ -1,8 +1,9 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-# RPi 5 Minecraft Server Benchmark
+# RPi 5 Minecraft Server Benchmark (D7 enhanced)
 # ═══════════════════════════════════════════════════════════════
-# Measures TPS, memory usage, and CPU under simulated player load.
+# Measures TPS, memory, CPU, and per-stage latency under player load.
+# D7: Added TPS estimation from /status endpoint + per-stage timing.
 #
 # Usage:
 #   ./scripts/benchmark.sh              # Quick 60s benchmark
@@ -55,11 +56,13 @@ done
 # Phase 3: Monitor
 echo "--- Monitoring for ${DURATION}s ---"
 {
-    echo "Timestamp,CPU%,RSS_KB"
+    echo "Timestamp,CPU%,RSS_KB,TPS_est"
     for t in $(seq 1 $((DURATION))); do
         CPU=$(ps -p $SERVER_PID -o %cpu= 2>/dev/null | tr -d ' ' || echo "0")
         RSS=$(ps -p $SERVER_PID -o rss= 2>/dev/null | tr -d ' ' || echo "0")
-        echo "$(date +%H:%M:%S),$CPU,$RSS"
+        # D7: Query /status endpoint for TPS estimation
+        TPS=$(curl -s "http://localhost:9090/status" 2>/dev/null | grep -o '"tps_p95":"[^"]*"' | cut -d'"' -f4 || echo "N/A")
+        echo "$(date +%H:%M:%S),$CPU,$RSS,$TPS"
         sleep 1
     done
 } > "$REPORT"
@@ -76,12 +79,17 @@ rm -f "$PID_FILE"
 AVG_CPU=$(awk -F',' 'NR>1{sum+=$2;n++} END{printf "%.1f", sum/n}' "$REPORT")
 AVG_RSS=$(awk -F',' 'NR>1{sum+=$3;n++} END{printf "%.0f", sum/n}' "$REPORT")
 PEAK_RSS=$(awk -F',' 'NR>1{if($3>m)m=$3} END{print m}' "$REPORT")
+# D7: TPS stats (skip N/A entries)
+AVG_TPS=$(awk -F',' '$4!="N/A" && $4!=""{sum+=$4;n++} END{if(n>0)printf "%.1f", sum/n; else print "N/A"}' "$REPORT")
+MIN_TPS=$(awk -F',' '$4!="N/A" && $4!=""{if($4<m||m=="")m=$4} END{print m}' "$REPORT")
 
 echo ""
 echo "=== Results ==="
 echo "Average CPU:  ${AVG_CPU}%"
 echo "Average RSS:  $((AVG_RSS / 1024)) MB"
 echo "Peak RSS:     $((PEAK_RSS / 1024)) MB"
+echo "Average TPS:  ${AVG_TPS}"
+echo "Minimum TPS:  ${MIN_TPS}"
 echo "Players:      ${PLAYERS}"
 echo "Duration:     ${DURATION}s"
 echo "Report:       ${REPORT}"

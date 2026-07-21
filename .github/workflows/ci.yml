@@ -74,3 +74,51 @@ jobs:
 
       - name: Check binary size
         run: ls -lh target/${{ matrix.target }}/release/mc-server* || true
+
+      # E7: Performance regression check (binary size within acceptable range)
+      - name: Performance regression check
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          SIZE_BYTES=$(stat -c%s target/${{ matrix.target }}/release/mc-server 2>/dev/null || echo "0")
+          SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+          echo "Binary size: ${SIZE_MB} MB"
+          # Alert if binary exceeds 35MB (baseline ~20-25MB for Rust release builds)
+          if [ "$SIZE_MB" -gt 35 ]; then
+            echo "⚠️ Warning: binary size ${SIZE_MB}MB exceeds 35MB limit"
+          else
+            echo "✅ Binary size OK (${SIZE_MB}MB)"
+          fi
+
+  # D6: PGO optimization build (scheduled, not per-PR — takes ~5min)
+  optimize:
+    name: PGO Optimize (aarch64)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+          components: llvm-tools
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu llvm-tools netcat-openbsd
+
+      - name: PGO Build
+        run: bash scripts/ci-optimize.sh
+        env:
+          TARGET: aarch64-unknown-linux-gnu
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Upload PGO binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mc-server-aarch64-pgo
+          path: target/aarch64-unknown-linux-gnu/release/mc-server
+
+      - name: Check PGO binary size
+        run: ls -lh target/aarch64-unknown-linux-gnu/release/mc-server || true

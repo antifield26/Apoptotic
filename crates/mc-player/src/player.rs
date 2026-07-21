@@ -187,6 +187,16 @@ pub struct Player {
     pub is_flying: bool,
     /// Absorption 金心 (额外血量, 伤害优先扣除)
     pub absorption_health: f32,
+    /// E2: Anti-cheat — last known valid position for rubberband
+    pub ac_last_valid_x: f64,
+    pub ac_last_valid_y: f64,
+    pub ac_last_valid_z: f64,
+    /// E2: Violation counter (decays over time when player moves legally)
+    pub ac_violations: u8,
+    /// E2: Tick of last violation
+    pub ac_last_violation_tick: u64,
+    /// E2: Pending teleport flag (server-side teleports bypass anti-cheat)
+    pub ac_bypass_until: u64,
 }
 
 /// 共享的玩家管理器 — DashMap 无锁并发
@@ -278,6 +288,8 @@ impl PlayerManager {
             cursor_item: None,
             is_flying: false,
             absorption_health: 0.0,
+            ac_last_valid_x: 0.0, ac_last_valid_y: 64.0, ac_last_valid_z: 0.0,
+            ac_violations: 0, ac_last_violation_tick: 0, ac_bypass_until: 0,
         };
 
         let name = player.username.clone();
@@ -463,6 +475,40 @@ impl PlayerManager {
     }
 
     /// 设置玩家生命值
+    // ═══ E2: Anti-cheat state accessors ═══
+    /// Update anti-cheat valid position and decay violations
+    pub fn ac_update_valid(&self, uuid: &Uuid, x: f64, y: f64, z: f64, tick: u64) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            if tick - p.ac_last_violation_tick >= 20 {
+                p.ac_violations = p.ac_violations.saturating_sub(1);
+            }
+            p.ac_last_valid_x = x;
+            p.ac_last_valid_y = y;
+            p.ac_last_valid_z = z;
+        }
+    }
+    /// Accumulate violations and check rubberband threshold. Returns (violations, should_rubberband).
+    pub fn ac_add_violation(&self, uuid: &Uuid, tick: u64) -> (u8, bool) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.ac_violations = p.ac_violations.saturating_add(2);
+            p.ac_last_violation_tick = tick;
+            let should_rubberband = p.ac_violations >= 8;
+            (p.ac_violations, should_rubberband)
+        } else {
+            (0, false)
+        }
+    }
+    /// Get last valid anti-cheat position
+    pub fn ac_valid_position(&self, uuid: &Uuid) -> Option<(f64, f64, f64)> {
+        self.players.get(uuid).map(|p| (p.ac_last_valid_x, p.ac_last_valid_y, p.ac_last_valid_z))
+    }
+    /// Reset anti-cheat violations after rubberband
+    pub fn ac_reset_violations(&self, uuid: &Uuid) {
+        if let Some(mut p) = self.players.get_mut(uuid) {
+            p.ac_violations = 0;
+        }
+    }
+
     pub fn set_health(&self, uuid: &Uuid, health: f32) -> Result<(), String> {
         match self.players.get_mut(uuid) {
             Some(mut p) => {
@@ -743,8 +789,8 @@ impl PlayerManager {
         // Apply Strength/Weakness from attacker
         let mut effective = raw_damage;
         if let Some(attacker) = attacker_uuid {
-            let strength = self.get_effect_level(attacker, 5) as f32; // strength=5
-            let weakness = self.get_effect_level(attacker, 18) as f32; // weakness=18
+            let strength = self.get_effect_level(attacker, 4) as f32; // strength=4
+            let weakness = self.get_effect_level(attacker, 17) as f32; // weakness=17
             effective += strength * 3.0;
             effective = (effective - weakness * 4.0).max(0.0);
         }
@@ -755,7 +801,7 @@ impl PlayerManager {
             }
             // Smite and Bane handled by caller based on target type
         // Resistance effect (each level -20% damage)
-        let resistance_level = self.get_effect_level(uuid, 11); // resistance=11
+        let resistance_level = self.get_effect_level(uuid, 10); // resistance=10
         if resistance_level > 0 {
             effective *= (1.0 - resistance_level as f32 * 0.2).max(0.0);
         }
@@ -818,7 +864,7 @@ impl PlayerManager {
     /// Apply fall damage based on fall distance (with Feather Falling enchant)
     pub fn apply_fall_damage(&self, uuid: &Uuid, fall_distance: f32, feather_falling: u8) {
         // SlowFalling(28): complete fall damage immunity
-        let slow_fall = self.get_effect_level(uuid, 28);
+        let slow_fall = self.get_effect_level(uuid, 27); // SlowFalling=27
         if slow_fall > 0 { return; }
         if fall_distance > 3.0 {
             let mut damage = (fall_distance - 3.0) * 1.0;
@@ -834,9 +880,9 @@ impl PlayerManager {
     /// Apply environmental damage (void, fire, drowning)
     pub fn apply_environmental_damage(&self, uuid: &Uuid, dmg_type: &str) {
         // Fire Resistance cancels fire damage
-        if dmg_type == "fire" && self.get_effect_level(uuid, 12) > 0 { return; } // fire_resistance=12
+        if dmg_type == "fire" && self.get_effect_level(uuid, 11) > 0 { return; } // FireResistance=11
         // Water Breathing prevents drowning
-        if dmg_type == "drowning" && (self.get_effect_level(uuid, 13) > 0 || self.get_effect_level(uuid, 29) > 0) { return; } // water_breathing=13, conduit_power=29
+        if dmg_type == "drowning" && (self.get_effect_level(uuid, 12) > 0 || self.get_effect_level(uuid, 28) > 0) { return; } // WaterBreathing=12, ConduitPower=28
         let damage = match dmg_type {
             "void" => 4.0,
             "fire" => 1.0,
@@ -870,7 +916,7 @@ impl PlayerManager {
 
     /// Get the effective max health, accounting for HealthBoost effect
     pub fn get_max_health(&self, uuid: &Uuid) -> f32 {
-        let boost_lvl = self.get_effect_level(uuid, 21); // HealthBoost=21
+        let boost_lvl = self.get_effect_level(uuid, 20); // HealthBoost=20
         20.0 + 4.0 * boost_lvl as f32
     }
 
@@ -888,8 +934,8 @@ impl PlayerManager {
 
     /// Apply periodic damage effects (poison, wither) — call every 25 ticks
     pub fn tick_effect_damage(&self, uuid: &Uuid) {
-        let poison_level = self.get_effect_level(uuid, 19); // poison=19
-        let wither_level = self.get_effect_level(uuid, 20); // wither=20
+        let poison_level = self.get_effect_level(uuid, 18); // Poison=18
+        let wither_level = self.get_effect_level(uuid, 19); // Wither=19
         if (poison_level > 0 || wither_level > 0)
             && let Some(mut p) = self.players.get_mut(uuid) {
                 if poison_level > 0 && p.health > 1.0 {

@@ -42,6 +42,29 @@ pub struct TrackedMob {
     pub absorbed_block_id: Option<u32>,
     /// Sulfur Cube (26.2): whether the cube is small (from splitting)
     pub is_small_cube: bool,
+    /// C4: Dirty flags for incremental sync (bitmask)
+    /// bit 0 = position, bit 1 = metadata (health, ai_state, etc.)
+    pub dirty_flags: u8,
+}
+
+/// C4: Dirty flag constants for TrackedMob incremental sync
+impl TrackedMob {
+    pub const DIRTY_POSITION: u8 = 1 << 0;
+    pub const DIRTY_METADATA: u8 = 1 << 1;
+    pub const DIRTY_ALL: u8 = Self::DIRTY_POSITION | Self::DIRTY_METADATA;
+
+    /// Check if position changed since last sync
+    pub fn position_dirty(&self) -> bool { self.dirty_flags & Self::DIRTY_POSITION != 0 }
+    /// Check if metadata changed since last sync
+    pub fn metadata_dirty(&self) -> bool { self.dirty_flags & Self::DIRTY_METADATA != 0 }
+    /// Check if anything changed since last sync
+    pub fn is_dirty(&self) -> bool { self.dirty_flags != 0 }
+    /// Mark position as changed (call after mob position update)
+    pub fn mark_position_dirty(&mut self) { self.dirty_flags |= Self::DIRTY_POSITION; }
+    /// Mark metadata as changed (call after health/ai/state changes)
+    pub fn mark_metadata_dirty(&mut self) { self.dirty_flags |= Self::DIRTY_METADATA; }
+    /// Clear all dirty flags (call after syncing to client)
+    pub fn clear_dirty(&mut self) { self.dirty_flags = 0; }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -317,6 +340,14 @@ impl MobManager {
         }
     }
 
+    /// Insert a tracked mob into the world (used by spawning and 26.2 death effects)
+    pub fn insert_mob(&self, mob: TrackedMob) {
+        let cx = (mob.position.x.floor() as i32).div_euclid(16);
+        let cz = (mob.position.z.floor() as i32).div_euclid(16);
+        self.chunk_mobs.entry((cx, cz)).or_default().push(mob.entity_id);
+        self.mobs.insert(mob.entity_id, mob);
+    }
+
     /// Spawn a projectile with enchantment levels (returns the new entity ID)
     pub fn spawn_projectile_enchanted(
         &self,
@@ -435,9 +466,17 @@ impl MobManager {
     pub fn send_position(&self, entity_id: i32, x: f64, y: f64, z: f64) {
         // Update position in-place if the entity exists
         if let Some(mut mob) = self.mobs.get_mut(&entity_id) {
+            // C4: skip if position hasn't actually changed (avoids redundant network sync)
+            let dx = (mob.position.x - x).abs();
+            let dy = (mob.position.y - y).abs();
+            let dz = (mob.position.z - z).abs();
+            if dx < 0.01 && dy < 0.01 && dz < 0.01 {
+                return; // position unchanged — no sync needed
+            }
             mob.position.x = x;
             mob.position.y = y;
             mob.position.z = z;
+            mob.mark_position_dirty();
         }
         let _ = self.position_tx.send(MobPositionEvent { entity_id, x, y, z });
     }
@@ -479,6 +518,7 @@ impl MobManager {
     pub fn damage(&self, entity_id: i32, amount: f32) -> Option<f32> {
         self.mobs.get_mut(&entity_id).map(|mut mob| {
             mob.health = (mob.health - amount).max(0.0);
+            mob.mark_metadata_dirty(); // C4: incremental sync
             mob.health
         })
     }
@@ -607,6 +647,7 @@ impl MobManager {
             sulfur_cube_archetype: None,
             absorbed_block_id: None,
             is_small_cube: true,
+            dirty_flags: 3,
         };
         let chunk = (
             (small.position.x.floor() as i32).div_euclid(16),
@@ -981,6 +1022,180 @@ impl MobManager {
                         mob.position.z += angle.sin() * 3.0;
                         let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
                         mob.ai_timer = 35; continue;
+                    }
+                    // ── B3: 8 new entity AIs ──
+                    // Parrot (98): flies around, mimics nearby mobs, perches high
+                    if mob.mob_type == ET::PARROT && mob.age_ticks % 25 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        // Fly in circles, prefer high Y
+                        mob.position.x += angle.cos() * 2.0;
+                        mob.position.z += angle.sin() * 2.0;
+                        mob.position.y = (mob.position.y + (fastrand::f64() - 0.3) * 1.5).clamp(64.0, 200.0);
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 15; continue;
+                    }
+                    // Ocelot (91): sneaky stalking — slow creep, avoid players, hunt chickens
+                    if mob.mob_type == 91 && mob.age_ticks % 40 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        if let Some(pm) = player_manager {
+                            // Avoid players within 6 blocks
+                            let mut near_player = false;
+                            for player in pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dz = player.position.z - mob.position.z;
+                                if dx*dx + dz*dz < 36.0 {
+                                    near_player = true;
+                                    // Flee from player
+                                    let dist = (dx*dx + dz*dz).sqrt().max(0.01);
+                                    mob.position.x -= (dx / dist) * 3.0;
+                                    mob.position.z -= (dz / dist) * 3.0;
+                                    break;
+                                }
+                            }
+                            if !near_player {
+                                mob.position.x += angle.cos() * 1.5;
+                                mob.position.z += angle.sin() * 1.5;
+                            }
+                        } else {
+                            mob.position.x += angle.cos() * 1.5;
+                            mob.position.z += angle.sin() * 1.5;
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 20; continue;
+                    }
+                    // Turtle (138): slow on land, swims in water, lays eggs on beaches
+                    if mob.mob_type == ET::TURTLE && mob.age_ticks % 40 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        // If in water (Y < 63, on beach), swim
+                        if mob.position.y < 63.0 {
+                            mob.position.x += angle.cos() * 1.0;
+                            mob.position.z += angle.sin() * 1.0;
+                            mob.position.y = (mob.position.y + 0.2).min(62.0);
+                        } else {
+                            // On land: very slow
+                            mob.position.x += angle.cos() * 0.5;
+                            mob.position.z += angle.sin() * 0.5;
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 25; continue;
+                    }
+                    // Dolphin (35): fast swimmer, jumps out of water, playful
+                    if mob.mob_type == ET::DOLPHIN && mob.age_ticks % 20 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        let speed = 2.5;
+                        mob.position.x += angle.cos() * speed;
+                        mob.position.z += angle.sin() * speed;
+                        // Jump out of water occasionally
+                        if fastrand::u32(..).is_multiple_of(5) {
+                            mob.position.y += 2.0;
+                        }
+                        mob.position.y = (mob.position.y + (fastrand::f64() - 0.5) * 1.0).clamp(40.0, 64.0);
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 10; continue;
+                    }
+                    // Nautilus (88): 26.2 — drifts slowly underwater, passive
+                    if mob.mob_type == ET::NAUTILUS && mob.age_ticks % 40 == 0 {
+                        let angle = fastrand::f64() * std::f64::consts::TAU;
+                        mob.position.x += angle.cos() * 0.3;
+                        mob.position.z += angle.sin() * 0.3;
+                        mob.position.y += (fastrand::f64() - 0.5) * 0.5;
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 30; continue;
+                    }
+                    // ZombieNautilus (153): 26.2 — hostile aquatic, swims toward players
+                    if mob.mob_type == ET::ZOMBIE_NAUTILUS && mob.age_ticks % 30 == 0
+                        && let Some(pm) = player_manager {
+                            // Find nearest player within 16 blocks
+                            for player in pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dy = player.position.y - mob.position.y;
+                                let dz = player.position.z - mob.position.z;
+                                let dist = (dx*dx + dy*dy + dz*dz).sqrt();
+                                if dist < 12.0 {
+                                    if dist > 2.0 {
+                                        let speed = 1.8;
+                                        mob.position.x += (dx / dist) * speed;
+                                        mob.position.z += (dz / dist) * speed;
+                                    }
+                                    if dist < 3.0 && mob.attack_cooldown == 0 {
+                                        let _ = pm.apply_damage(&player.uuid, 4.0, mob.age_ticks as u64);
+                                        mob.attack_cooldown = 20;
+                                    }
+                                    break;
+                                }
+                            }
+                            let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                            mob.ai_timer = 15; continue;
+                        }
+                    // Creaking (31): 26.2 — stationary when looked at, fast when not watched
+                    if mob.mob_type == ET::CREAKING && mob.age_ticks % 30 == 0
+                        && let Some(pm) = player_manager {
+                            // Check if any player is looking at the creaking (within 12 blocks + facing)
+                            let mut being_watched = false;
+                            for player in pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dz = player.position.z - mob.position.z;
+                                let dist = (dx*dx + dz*dz).sqrt();
+                                if dist < 12.0 {
+                                    // Player is close enough — assume watching unless facing away
+                                    let facing_x = (player.position.yaw as f64).to_radians().sin();
+                                    let facing_z = (player.position.yaw as f64).to_radians().cos();
+                                    let dot = (dx/dist) * facing_x + (dz/dist) * facing_z;
+                                    if dot > -0.3 { // player roughly facing toward creaking
+                                        being_watched = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !being_watched {
+                                // Fast rush toward nearest player
+                                for player in pm.all_players() {
+                                    let dx = player.position.x - mob.position.x;
+                                    let dz = player.position.z - mob.position.z;
+                                    let dist = (dx*dx + dz*dz).sqrt().max(0.01);
+                                    if dist < 16.0 {
+                                        let speed = 3.5; // fast when not watched
+                                        mob.position.x += (dx / dist) * speed;
+                                        mob.position.z += (dz / dist) * speed;
+                                        if dist < 3.0 && mob.attack_cooldown == 0 {
+                                            let _ = pm.apply_damage(&player.uuid, 8.0, mob.age_ticks as u64);
+                                            mob.attack_cooldown = 25;
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                            let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                            mob.ai_timer = 15; continue;
+                        }
+                    // Pufferfish (107): inflates when player is near, deals poison damage
+                    if mob.mob_type == ET::PUFFERFISH && mob.age_ticks % 25 == 0 {
+                        let mut inflated = false;
+                        if let Some(pm) = player_manager {
+                            for player in pm.all_players() {
+                                let dx = player.position.x - mob.position.x;
+                                let dy = player.position.y - mob.position.y;
+                                let dz = player.position.z - mob.position.z;
+                                let dist = (dx*dx + dy*dy + dz*dz).sqrt();
+                                if dist < 3.0 {
+                                    // Inflate: apply poison and minor damage
+                                    inflated = true;
+                                    let _ = pm.add_effect(&player.uuid, mc_core::effect::ActiveEffect {
+                                        effect: mc_core::effect::EffectType::Poison,
+                                        amplifier: 0, duration_ticks: 100,
+                                    });
+                                    let _ = pm.apply_damage(&player.uuid, 1.0, mob.age_ticks as u64);
+                                    break;
+                                }
+                            }
+                        }
+                        if !inflated {
+                            let angle = fastrand::f64() * std::f64::consts::TAU;
+                            mob.position.x += angle.cos() * 0.5;
+                            mob.position.z += angle.sin() * 0.5;
+                        }
+                        let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
+                        mob.ai_timer = 15; continue;
                     }
                     should_continue = false;
                 }
@@ -2145,6 +2360,72 @@ impl MobManager {
         self.mobs.iter().filter(|e| matches!(e.mob_type, 25|33|34|35|36|37|38|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|63|71|72|105|106)).count()
     }
 
+    /// Count hostile mobs near a specific chunk (C3: per-player mob cap)
+    pub fn count_near(&self, cx: i32, cz: i32) -> i32 {
+        let mut count = 0i32;
+        for dcx in -1..=1 {
+            for dcz in -1..=1 {
+                if let Some(mobs) = self.chunk_mobs.get(&(cx + dcx, cz + dcz)) {
+                    for eid in mobs.iter() {
+                        if let Some(mob) = self.mobs.get(eid) {
+                            if mc_core::constants::entity_type::is_hostile(mob.mob_type) {
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    /// C6: Spatial-hash-based nearest entity query.
+    /// Returns entities within `radius` blocks of (x, y, z), sorted by distance.
+    /// Uses chunk_mobs spatial index for O(C) complexity instead of O(E).
+    pub fn entities_in_range(&self, x: f64, y: f64, z: f64, radius: f64) -> Vec<(i32, f64)> {
+        let r2 = radius * radius;
+        let cx = (x.floor() as i32).div_euclid(16);
+        let cz = (z.floor() as i32).div_euclid(16);
+        let chunk_radius = ((radius / 16.0).ceil() as i32).max(1);
+        let mut results: Vec<(i32, f64)> = Vec::new();
+        for dcx in -chunk_radius..=chunk_radius {
+            for dcz in -chunk_radius..=chunk_radius {
+                if let Some(eids) = self.chunk_mobs.get(&(cx + dcx, cz + dcz)) {
+                    for eid in eids.iter() {
+                        if let Some(mob) = self.mobs.get(eid) {
+                            let dx = mob.position.x - x;
+                            let dy = mob.position.y - y;
+                            let dz = mob.position.z - z;
+                            let d2 = dx*dx + dy*dy + dz*dz;
+                            if d2 <= r2 {
+                                results.push((*eid, d2.sqrt()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Sort by distance (closest first)
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        results
+    }
+
+    /// C6: Fast entity count within range using spatial hash (avoids O(E) scan)
+    pub fn count_in_range(&self, x: f64, _y: f64, z: f64, radius: f64) -> usize {
+        let cx = (x.floor() as i32).div_euclid(16);
+        let cz = (z.floor() as i32).div_euclid(16);
+        let chunk_radius = ((radius / 16.0).ceil() as i32).max(1);
+        let mut count = 0usize;
+        for dcx in -chunk_radius..=chunk_radius {
+            for dcz in -chunk_radius..=chunk_radius {
+                if let Some(eids) = self.chunk_mobs.get(&(cx + dcx, cz + dcz)) {
+                    count += eids.len();
+                }
+            }
+        }
+        count
+    }
+
     pub fn get_chasing(&self) -> Vec<TrackedMob> {
         self.mobs.iter().filter(|e| matches!(e.ai_state, MobAiState::Chasing { .. } | MobAiState::AboutToExplode { .. })).map(|e| e.clone()).collect()
     }
@@ -2271,7 +2552,7 @@ mod tests {
             owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0,
             is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false,
             path: vec![], path_last_tick: 0, is_on_fire: false, is_in_water: false,
-            sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+            sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
         }
     }
 

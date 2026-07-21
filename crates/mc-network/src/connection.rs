@@ -189,6 +189,9 @@ pub struct ServerRef {
     pub plugin_manager: std::sync::Arc<mc_plugin::plugin::PluginManager>,
     /// Plugin context (shared for notifications)
     pub plugin_ctx: mc_plugin::plugin::PluginContext,
+    /// Entity broadcast radius (configurable, default 64.0 blocks)
+    /// Used as cap for per-entity-type tracking ranges (A6).
+    pub entity_broadcast_radius: f64,
 }
 
 /// 处理一个客户端连接
@@ -1088,7 +1091,7 @@ async fn handle_play(
                 is_baby: false,
                 in_love_ticks: 0,
                 breed_cooldown: 0,
-                is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+                is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
             };
             server.mob_manager.register(tracked);
         }
@@ -1324,7 +1327,7 @@ async fn stream_new_chunks(
                     is_baby: false,
                     in_love_ticks: 0,
                     breed_cooldown: 0,
-                    is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+                    is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
                 };
                 server.mob_manager.register(tracked);
             }
@@ -1510,8 +1513,10 @@ async fn play_loop(
                 }
                 continue;
             }
-            // Per-entity-type distance check for spawn/move events
+            // Per-entity-type distance check for spawn/move events (A6: configurable cap)
             // Hostile=48, Passive=32, Item=16, Player=view*16+32 (vanilla values)
+            // All capped by entity_broadcast_radius from server config.
+            let radius_cap = server.entity_broadcast_radius.powi(2).min(max_range);
             let entity_tracking_range = match &ev.kind {
                 mc_player::player::EntityEventKind::Spawn(_, _, _, _, _) |
                 mc_player::player::EntityEventKind::Move(_, _, _, _, _) => max_range,
@@ -1519,11 +1524,11 @@ async fn play_loop(
                     let dist = match mob_type {
                         // Hostile mobs — track at 48 blocks
                         25|33|34|35|36|37|38|43|45|46|47|48|49|50|51|52|
-                        53|54|55|56|57|58|59|60|61|62|63|71|72|105|106 => 48.0_f64,
+                        53|54|55|56|57|58|59|60|61|62|63|71|72|105|106 => 48.0_f64.min(radius_cap.sqrt()),
                         // Items/XP orbs — track at 16 blocks
-                        0 => 16.0_f64,
+                        0 => 16.0_f64.min(radius_cap.sqrt()),
                         // Passive mobs — track at 32 blocks
-                        _ => 32.0_f64,
+                        _ => 32.0_f64.min(radius_cap.sqrt()),
                     };
                     dist * dist
                 }
@@ -1940,6 +1945,11 @@ async fn play_loop(
                             };
                             let _ = send_packet(io, &pos).await;
                             server.player_manager.set_health(&_uuid, 20.0).ok();
+                            // Advancement: LocationChanged (B5)
+                            if let Some(ref dim_name) = pdata.as_ref().map(|p| p.dimension.clone()) {
+                                fire_advancement(server, io, &_uuid,
+                                    &mc_player::advancement::Criterion::LocationChanged { dimension: dim_name.clone() }).await;
+                            }
                         }
                     }
                     Err(e) => debug!("ClientCommand decode error: {}", e),
@@ -2037,14 +2047,28 @@ async fn play_loop(
                         let speed_mul = server.player_manager.get(&_uuid)
                             .map(|p| p.speed_multiplier).unwrap_or(1.0);
                         let max_delta = 10.0 * speed_mul as f64;
-                        let dx = (x - old_x).abs();
-                        let dz = (z - old_z).abs();
-                        if dx <= max_delta && dz <= max_delta {
+                        let h_dist = ((x - old_x).powi(2) + (z - old_z).powi(2)).sqrt();
+                        let v_dist = (y - old_y).abs();
+                        // E2: Anti-cheat validation with violation buffer
+                        let mut accepted = true;
+                        if h_dist <= max_delta && v_dist <= max_delta {
+                            server.player_manager.ac_update_valid(&_uuid, x, y, z, tick_count);
                             let _ = server.player_manager.update_position_full(&_uuid, x, y, z, old_yaw, old_pitch);
+                        } else if h_dist > max_delta && h_dist > 3.0 {
+                            let (violations, rubberband) = server.player_manager.ac_add_violation(&_uuid, tick_count);
+                            if rubberband {
+                                if let Some((lx, ly, lz)) = server.player_manager.ac_valid_position(&_uuid) {
+                                    debug!("Anti-cheat: rubberbanding {} ({} violations, moved {:.1} blocks)", username, violations, h_dist);
+                                    server.player_manager.ac_reset_violations(&_uuid);
+                                    server.player_manager.update_position_full(&_uuid, lx, ly, lz, old_yaw, old_pitch).ok();
+                                    accepted = false;
+                                }
+                            }
                         }
-                        // Fallback for first join (no old position) or within bounds
-                        if let Some(eid) = server.player_manager.get_entity_id(&_uuid) {
-                            server.player_manager.broadcast_entity_move(eid, _uuid, x, y, z, old_yaw, old_pitch);
+                        if accepted {
+                            if let Some(eid) = server.player_manager.get_entity_id(&_uuid) {
+                                server.player_manager.broadcast_entity_move(eid, _uuid, x, y, z, old_yaw, old_pitch);
+                            }
                         }
                         // Elytra glide: auto-start when falling with elytra equipped
                         if !server.player_manager.is_flying(&_uuid) {
@@ -2738,8 +2762,8 @@ async fn play_loop(
                         let lure_level = held_fishing_enchants.get("lure").copied().unwrap_or(0);
                         let enchant_luck = held_fishing_enchants.get("luck_of_the_sea").copied().unwrap_or(0);
                         // Luck/Unluck effects modify fishing treasure probability
-                        let effect_luck = server.player_manager.get_effect_level(&_uuid, 26); // Luck=26
-                        let effect_unluck = server.player_manager.get_effect_level(&_uuid, 27); // Unluck=27
+                        let effect_luck = server.player_manager.get_effect_level(&_uuid, 25); // Luck=25
+                        let effect_unluck = server.player_manager.get_effect_level(&_uuid, 26); // Unluck=26
                         let luck_level = enchant_luck.saturating_add(effect_luck).saturating_sub(effect_unluck);
 
                         let existing_fishing = player.as_ref().and_then(|p| p.fishing.as_ref()).cloned();
@@ -3045,9 +3069,11 @@ async fn play_loop(
                                 // Remove 1 from held item stack
                                 let slot = server.player_manager.get_held_slot(&_uuid).unwrap_or(0);
                                 let _ = server.player_manager.remove_one_from_slot(&_uuid, slot);
-                                // Advancement: ItemUsed (for food items that match advancement criteria)
+                                // Advancement: ItemUsed + ConsumeItem (for food items)
                                 fire_advancement(server, io, &_uuid,
                                     &mc_player::advancement::Criterion::ItemUsed { item_id: held_id }).await;
+                                fire_advancement(server, io, &_uuid,
+                                    &mc_player::advancement::Criterion::ConsumeItem { item_id: held_id }).await;
                                 debug!("{} ate item {} (+{} hunger, +{:.1} saturation)", username, held_id, nutrition, saturation);
                             }
                     }
@@ -3455,7 +3481,7 @@ async fn play_loop(
                                                 ai_state: mc_player::mob::MobAiState::Idle,
                                                 attack_cooldown: 0, last_sync_tick: 0,
                                                 owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0,
-                                                is_baby: true, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+                                                is_baby: true, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, path: Vec::new(), path_last_tick: 0, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
                                             };
                                             server.mob_manager.register(baby);
                                             // Spawn baby entity packet

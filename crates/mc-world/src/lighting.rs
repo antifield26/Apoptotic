@@ -336,3 +336,64 @@ pub fn propagate_lighting_cross_chunk(
     }
     // Also handle corners (x=0,z=0 etc.) — covered by the individual checks above
 }
+
+// ═══ C1: Multi-chunk light flooding ═══
+/// Propagate block light across chunk boundaries using BFS.
+/// Queues neighbor chunk positions when light reaches a chunk edge.
+/// Handles up to 3 levels of cross-chunk propagation (enough for most light sources).
+pub fn propagate_lighting_across_chunks(
+    chunk_store: &crate::chunk_store::ChunkStore,
+    start_cp: mc_core::position::ChunkPos,
+) {
+    use mc_core::position::ChunkPos;
+    let mut pending_chunks: VecDeque<(ChunkPos, u8)> = VecDeque::with_capacity(16);
+    let mut visited_chunks: std::collections::HashSet<ChunkPos> = std::collections::HashSet::with_capacity(16);
+
+    pending_chunks.push_back((start_cp, 0));
+    visited_chunks.insert(start_cp);
+
+    while let Some((cp, depth)) = pending_chunks.pop_front() {
+        if depth >= 3 { continue; }
+
+        // Phase 1: propagate within this chunk (drop borrow before neighbor access)
+        if let Some(mut chunk) = chunk_store.get_mut(&cp) {
+            propagate_block_light(&mut chunk);
+        }
+
+        // Phase 2: collect edge light levels (immutable borrow, separate scope)
+        let neighbor_info: Vec<(ChunkPos, usize)> = {
+            let neighbors: [(i32, i32, usize, usize); 4] = [
+                (-1, 0, 0, 8), (1, 0, 15, 8), (0, -1, 8, 0), (0, 1, 8, 15),
+            ];
+            let mut result = Vec::with_capacity(4);
+            if let Some(chunk) = chunk_store.get(&cp) {
+                for (_dcx, _dcz, edge_x, edge_z) in &neighbors {
+                    let ncp = ChunkPos::new(cp.x + _dcx, cp.z + _dcz);
+                    if visited_chunks.contains(&ncp) { continue; }
+                    // Check if light at this edge is strong enough to propagate
+                    let mut has_light = false;
+                    for sy in 0..24 {
+                        if let Some(sec) = &chunk.sections[sy] {
+                            let bl = sec.block_light[*edge_z * 16 + *edge_x] & 0x0F;
+                            let bl2 = sec.block_light[*edge_z * 16 + *edge_x] >> 4;
+                            if bl > 3 || bl2 > 3 { has_light = true; break; }
+                        }
+                    }
+                    if has_light {
+                        result.push((ncp, *edge_z * 16 + *edge_x)); // store edge light position
+                    }
+                }
+            }
+            result
+        }; // immutable borrow dropped here
+
+        // Phase 3: enqueue and propagate into neighbors (mutable borrows OK now)
+        for (ncp, _edge_pos) in neighbor_info {
+            visited_chunks.insert(ncp);
+            pending_chunks.push_back((ncp, depth + 1));
+            if let Some(mut neighbor) = chunk_store.get_mut(&ncp) {
+                propagate_block_light(&mut neighbor);
+            }
+        }
+    }
+}

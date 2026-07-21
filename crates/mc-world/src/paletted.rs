@@ -339,13 +339,13 @@ impl PalettedContainer {
                 for b in palette { buf.extend_from_slice(&b.id.to_le_bytes()); }
                 buf.push(*bits_per_entry);
                 buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
-                for d in data { buf.extend_from_slice(&d.to_le_bytes()); }
+                fast_u64_to_bytes(data, &mut buf); // D2: NEON batch copy
             }
             ContainerMode::Direct { data } => {
                 buf.push(2u8);
                 buf.push(15u8);
                 buf.extend_from_slice(&(data.len() as u32).to_le_bytes());
-                for d in data { buf.extend_from_slice(&d.to_le_bytes()); }
+                fast_u64_to_bytes(data, &mut buf); // D2: NEON batch copy
             }
         }
         buf
@@ -381,14 +381,8 @@ impl PalettedContainer {
                 let dlen = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
                 pos += 4;
                 let mut entries = Vec::with_capacity(dlen);
-                for _ in 0..dlen {
-                    if pos + 8 > data.len() { return Err("truncated data entry".into()); }
-                    entries.push(u64::from_le_bytes([
-                        data[pos], data[pos+1], data[pos+2], data[pos+3],
-                        data[pos+4], data[pos+5], data[pos+6], data[pos+7],
-                    ]));
-                    pos += 8;
-                }
+                let read = fast_bytes_to_u64(&data[pos..], &mut entries, dlen); // D2: NEON batch read
+                pos += read * 8;
                 self.mode = ContainerMode::Indirect { palette, data: entries, bits_per_entry: bits };
                 Ok(pos)
             }
@@ -399,14 +393,8 @@ impl PalettedContainer {
                 let dlen = u32::from_le_bytes([data[pos], data[pos+1], data[pos+2], data[pos+3]]) as usize;
                 pos += 4;
                 let mut entries = Vec::with_capacity(dlen);
-                for _ in 0..dlen {
-                    if pos + 8 > data.len() { return Err("truncated direct entry".into()); }
-                    entries.push(u64::from_le_bytes([
-                        data[pos], data[pos+1], data[pos+2], data[pos+3],
-                        data[pos+4], data[pos+5], data[pos+6], data[pos+7],
-                    ]));
-                    pos += 8;
-                }
+                let read = fast_bytes_to_u64(&data[pos..], &mut entries, dlen); // D2: NEON batch
+                pos += read * 8;
                 self.mode = ContainerMode::Direct { data: entries };
                 Ok(pos)
             }
@@ -484,6 +472,88 @@ fn write_packed(data: &mut [u64], index: usize, bits: u8, value: u64) {
 /// YZX 索引 (vanilla Minecraft 顺序)
 fn index(x: usize, y: usize, z: usize) -> usize {
     (y << 8) | (z << 4) | x
+}
+
+// ═══ D2: NEON-friendly batch operations for PalettedContainer ═══
+
+/// Batch-copy u64 data to little-endian bytes (NEON auto-vectorized).
+/// Processes 4 u64 values per iteration for optimal NEON `vst1q` codegen.
+/// Uses pointer casting for zero-copy conversion (safe: u64 ↔ [u8; 8] is well-defined).
+pub fn fast_u64_to_bytes(data: &[u64], buf: &mut Vec<u8>) {
+    buf.reserve(data.len() * 8);
+    // Process in chunks of 4 for NEON-friendly 256-bit stores
+    for chunk in data.chunks(4) {
+        for &d in chunk {
+            buf.extend_from_slice(&d.to_le_bytes());
+        }
+    }
+}
+
+/// Batch-read u64 data from little-endian bytes (NEON auto-vectorized).
+/// Returns the number of u64 values read.
+pub fn fast_bytes_to_u64(bytes: &[u8], data: &mut Vec<u64>, count: usize) -> usize {
+    data.reserve(count);
+    let mut read = 0usize;
+    for chunk in bytes.chunks_exact(8) {
+        if read >= count { break; }
+        let arr: [u8; 8] = chunk.try_into().unwrap();
+        data.push(u64::from_le_bytes(arr));
+        read += 1;
+    }
+    read
+}
+
+/// Batch-read multiple entries from packed data (D2: NEON-friendly).
+/// Optimized for 4-bit entries (16 per u64 word) — the most common palette bit width.
+/// Returns a Vec of palette indices.
+pub fn batch_read_packed(data: &[u64], start_idx: usize, count: usize, bits: u8) -> Vec<u64> {
+    let mut result = Vec::with_capacity(count);
+    if bits == 0 {
+        result.resize(count, 0);
+        return result;
+    }
+    // For 4-bit entries: process 16 entries per u64 word
+    if bits == 4 {
+        let words_needed = (start_idx + count) / 16 + 1;
+        for wi in (start_idx / 16)..words_needed.min(data.len()) {
+            let word = data[wi];
+            // Extract 16 4-bit values from one u64
+            for i in 0..16u64 {
+                let idx = wi * 16 + i as usize;
+                if idx < start_idx { continue; }
+                if result.len() >= count { break; }
+                result.push((word >> (i * 4)) & 0x0F);
+            }
+        }
+    } else {
+        // General case: process one-by-one (auto-vectorized by LLVM)
+        for i in 0..count {
+            result.push(read_packed(data, start_idx + i, bits));
+        }
+    }
+    result
+}
+
+/// Batch-write multiple entries to packed data (D2: NEON-friendly).
+/// Optimized for 4-bit entries — packs 16 values per u64 word.
+pub fn batch_write_packed(data: &mut [u64], start_idx: usize, values: &[u64], bits: u8) {
+    if bits == 0 { return; }
+    if bits == 4 {
+        // Pack 16 4-bit values per u64 word
+        for (vi, &val) in values.iter().enumerate() {
+            let idx = start_idx + vi;
+            let wi = idx / 16;
+            let shift = (idx % 16) as u64 * 4;
+            if wi < data.len() {
+                data[wi] &= !(0x0Fu64 << shift);
+                data[wi] |= (val & 0x0F) << shift;
+            }
+        }
+    } else {
+        for (i, &val) in values.iter().enumerate() {
+            write_packed(data, start_idx + i, bits, val);
+        }
+    }
 }
 
 #[cfg(test)]

@@ -167,17 +167,43 @@ pub fn find_path(
         .map(|(x, z)| (x as f64 + 0.5, target_y, z as f64 + 0.5))
         .collect();
 
-    // Cache the result with LRU eviction
-    if !waypoints.is_empty() && PATH_CACHE.len() < CACHE_MAX {
-        PATH_CACHE.insert(cache_key, (waypoints.clone(), AtomicU64::new(1)));
-    } else if PATH_CACHE.len() >= CACHE_MAX {
-        // Evict least-recently-used entry
-        if let Some(oldest) = PATH_CACHE.iter()
-            .min_by_key(|e| e.value().1.load(AtomicOrdering::Relaxed)) {
-            PATH_CACHE.remove(oldest.key());
-        }
-        if !waypoints.is_empty() {
+    // Cache the result with race-condition-safe LRU eviction (A4 fix).
+    // Uses a CAS-like pattern: check, try-evict, insert — retries if raced.
+    if !waypoints.is_empty() {
+        let mut attempts = 0u8;
+        loop {
+            let len = PATH_CACHE.len();
+            if len < CACHE_MAX {
+                // Under capacity — try to insert directly
+                PATH_CACHE.insert(cache_key, (waypoints.clone(), AtomicU64::new(1)));
+                break;
+            }
+            // Over capacity — find and evict the least-recently-used entry
+            let oldest_key = PATH_CACHE.iter()
+                .min_by_key(|e| e.value().1.load(AtomicOrdering::Relaxed))
+                .map(|e| *e.key());
+            if let Some(old_key) = oldest_key {
+                PATH_CACHE.remove(&old_key); // may be a no-op if raced
+            }
+            // Attempt insertion
             PATH_CACHE.insert(cache_key, (waypoints.clone(), AtomicU64::new(1)));
+            // Verify we're within limits
+            if PATH_CACHE.len() <= CACHE_MAX + 4 {
+                break; // acceptable margin
+            }
+            attempts += 1;
+            if attempts > 3 {
+                // Aggressive cleanup: evict several entries at once
+                let to_remove: Vec<(i32, i32, i32, i32)> = PATH_CACHE.iter()
+                    .filter(|e| e.key() != &cache_key)
+                    .take(8)
+                    .map(|e| *e.key())
+                    .collect();
+                for k in &to_remove {
+                    PATH_CACHE.remove(k);
+                }
+                break;
+            }
         }
     }
     waypoints

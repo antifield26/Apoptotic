@@ -126,6 +126,9 @@ pub struct PerformanceConfig {
     /// Use transparent hugepages for chunk store (Linux only)
     #[serde(default)]
     pub use_hugepages: bool,
+    /// D5: Maximum memory budget in MB (None = use default 512MB for RPi 5)
+    #[serde(default)]
+    pub max_memory_mb: Option<u32>,
 }
 
 fn default_cpu_affinity() -> i32 { -1 }
@@ -301,6 +304,7 @@ impl Default for PerformanceConfig {
             tick_core_affinity: default_cpu_affinity(),
             io_core_affinity: default_cpu_affinity(),
             use_hugepages: false,
+            max_memory_mb: None, // D5: auto-detect (512MB default for 8GB RPi)
         }
     }
 }
@@ -390,6 +394,11 @@ impl Config {
             ("world", "seed") => self.world.seed = Some(value.to_string()),
             ("world", "view_distance") => self.world.view_distance = parse_or_warn(value),
             ("world", "difficulty") => self.world.difficulty = value.to_string(),
+            ("performance", "max_memory_mb") => {
+                if let Ok(mb) = value.parse::<u32>() {
+                    self.performance.max_memory_mb = Some(mb);
+                }
+            }
             _ => tracing::debug!("unknown config override: MCS_{}", key),
         }
     }

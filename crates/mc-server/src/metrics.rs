@@ -142,6 +142,82 @@ pub async fn serve_metrics(
                 return;
             }
 
+            // E1: Admin dashboard — live HTML panel
+            if request.contains("GET /admin") || request.contains("GET / ") {
+                let online = pm.online_count();
+                let cs_count = cs.count();
+                let uptime_secs = start.elapsed().as_secs();
+                let (_p50, _p95, _p99) = compute_tps_percentiles();
+                let memory = estimate_memory_mb();
+                let tick_val = tc.load(std::sync::atomic::Ordering::Relaxed);
+                let mins = uptime_secs / 60;
+                let hours = mins / 60;
+                let time_str = if hours > 0 {
+                    format!("{}h {}m", hours, mins % 60)
+                } else {
+                    format!("{}m {}s", mins, uptime_secs % 60)
+                };
+                let players = pm.all_players();
+                let player_rows: String = players.iter()
+                    .map(|p| format!(
+                        "<tr><td>{}</td><td>{:.0} HP</td><td>({:.0},{:.0},{:.0})</td><td>{}</td></tr>",
+                        p.username, p.health,
+                        p.position.x, p.position.y, p.position.z,
+                        p.dimension
+                    )).collect::<Vec<_>>().join("\n");
+                let html = format!(r#"HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Apoptotic — Admin Panel</title>
+<style>
+  body{{font-family:system-ui,sans-serif;background:#0d1117;color:#c9d1d9;margin:0;padding:20px}}
+  h1{{color:#58a6ff;margin:0 0 5px}} .sub{{color:#8b949e;font-size:14px}}
+  .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}
+  .card{{background:#161b22;border:1px solid#30363d;border-radius:8px;padding:16px}}
+  .card .label{{color:#8b949e;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}}
+  .card .value{{font-size:28px;font-weight:700;color:#58a6ff;margin:4px 0}}
+  .card .value.good{{color:#3fb950}} .card .value.warn{{color:#d2991d}} .card .value.bad{{color:#f85149}}
+  table{{width:100%;border-collapse:collapse;margin-top:20px}}
+  th,td{{text-align:left;padding:8px 12px;border-bottom:1px solid#21262d}}
+  th{{color:#8b949e;font-size:12px;text-transform:uppercase}} tr:hover{{background:#161b22}}
+  .footer{{color:#484f58;font-size:11px;margin-top:30px;text-align:center}}
+  .refresh{{color:#8b949e;font-size:12px}}
+</style>
+</head>
+<body>
+<h1>⚡ Apoptotic</h1>
+<div class="sub">Minecraft 26.2 Server — Admin Dashboard <span class="refresh">(auto-refresh 5s)</span></div>
+<div class="grid">
+  <div class="card"><div class="label">Players</div><div class="value good">{online}</div></div>
+  <div class="card"><div class="label">Chunks Loaded</div><div class="value">{cs_count}</div></div>
+  <div class="card"><div class="label">Uptime</div><div class="value">{time_str}</div></div>
+  <div class="card"><div class="label">Memory</div><div class="value">{memory} MB</div></div>
+  <div class="card"><div class="label">Total Ticks</div><div class="value">{tick_val}</div></div>
+  <div class="card"><div class="label">TPS (p95)</div><div class="value good">{tps_p95}</div></div>
+</div>
+<h3>Online Players</h3>
+<table>
+<tr><th>Name</th><th>Health</th><th>Position</th><th>Dimension</th></tr>
+{player_rows}
+</table>
+<div class="footer">Apoptotic v0.1.0 · Rust · Raspberry Pi 5 · MIT</div>
+<meta http-equiv="refresh" content="5">
+</body>
+</html>"#,
+                    online=online, cs_count=cs_count,
+                    time_str=time_str, memory=memory, tick_val=tick_val,
+                    tps_p95=_p95,
+                    player_rows=player_rows,
+                );
+                let _ = stream.write_all(html.as_bytes()).await;
+                return;
+            }
+
             // Only respond to GET /metrics
             if !request.contains("GET /metrics") {
                 let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\n\r\n").await;

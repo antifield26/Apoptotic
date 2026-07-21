@@ -19,7 +19,11 @@ pub fn is_redstone_component(id: u32) -> bool {
         | 146 | 364 | 319 | 151 | 354 | 355
         | 296 | 298 | 299 | 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 // wood pressure plates
         | 308 | 309 | 310 | 311 | 312 | 313 | 314 | 315 | 316 | 317 // wood buttons
-        | 318 | 287 | 356) // stone_button, tripwire_hook, sculk_shrieker
+        | 318 | 287 | 356 // stone_button, tripwire_hook, sculk_shrieker
+        | 1184 // B7: crafter (redstone pulse → craft one item)
+        | 1260 | 1261 | 1262 | 1263 // B7: copper bulb (oxidized variants, unpowered)
+        | 1264 | 1265 | 1266 | 1267 // B7: copper bulb (oxidized variants, powered)
+    )
 }
 
 /// Check if a block is a target block (outputs signal based on projectile accuracy)
@@ -280,6 +284,8 @@ pub fn is_constant_source(id: u32) -> bool { matches!(id, 152) }
 pub fn is_toggle_component(id: u32) -> bool { matches!(id, 852) }
 pub fn is_pulse_component(id: u32) -> bool { matches!(id, 853) }
 pub fn is_input_component(id: u32) -> bool { matches!(id, 994 | 152 | 852 | 853) }
+/// B7: Copper Bulb — toggles state on redstone pulse (T-flip-flop)
+pub fn is_copper_bulb(id: u32) -> bool { matches!(id, 1260 | 1261 | 1262 | 1263 | 1264 | 1265 | 1266 | 1267) }
 
 /// 音符盒下方方块 → 乐器音色
 pub fn note_block_instrument(below_id: u32) -> &'static str {
@@ -354,7 +360,10 @@ impl RedstoneEngine {
     }
 
     /// 每 2 tick 运行 (takes &self — no outer RwLock needed)
+    /// C2 optimization: only propagates from components whose signal actually changed,
+    /// with a per-tick node budget to prevent CPU spikes on large redstone networks.
     pub fn tick(&self, chunk_store: &crate::chunk_store::ChunkStore) {
+        const MAX_NODES_PER_TICK: usize = 4096; // propagation budget
         let mut bfs = self.bfs.lock();
 
         // ── Observer detection (check before processing updates) ──
@@ -384,10 +393,17 @@ impl RedstoneEngine {
             }
         }
 
-        // ── BFS Signal propagation ──
+        // ── BFS Signal propagation (C2: change-detection + budget) ──
+        let mut nodes_processed = 0usize;
         while let Some((x, y, z)) = bfs.pending_updates.pop_front() {
             if bfs.processed.contains(&(x, y, z)) { continue; }
+            if nodes_processed >= MAX_NODES_PER_TICK {
+                // Budget exceeded — defer remaining updates to next tick
+                bfs.pending_updates.push_back((x, y, z));
+                break;
+            }
             bfs.processed.insert((x, y, z));
+            nodes_processed += 1;
 
             let cp = ChunkPos::new(x >> 4, z >> 4);
             if let Some(chunk) = chunk_store.get(&cp) {
@@ -431,9 +447,17 @@ impl RedstoneEngine {
                     && self.signal_map.get(&(x, y + 1, z)).map(|v| *v > 0).unwrap_or(false);
                 let effective_power = if qc_powered { power.max(15) } else { power };
 
-                self.signal_map.insert((x, y, z), effective_power);
+                // C2: Only propagate if signal actually changed (skip redundant updates)
+                let prev_signal = self.signal_map.get(&(x, y, z)).map(|v| *v);
+                let signal_changed = prev_signal != Some(effective_power);
+                if signal_changed {
+                    self.signal_map.insert((x, y, z), effective_power);
+                } else {
+                    // Signal unchanged — skip neighbor propagation (Alternate Current key optimization)
+                    continue;
+                }
 
-                // Propagate to neighbors
+                // Propagate to neighbors only if signal changed
                 if effective_power > 0 {
                     for (dx, dy, dz) in &[(1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)] {
                         let nx = x + dx; let ny = y + dy; let nz = z + dz;
@@ -528,6 +552,13 @@ fn detect_piston_facing(x: i32, y: i32, z: i32, engine: &RedstoneEngine) -> (i32
                         *note = (*note + 1) % 25;
                     } else {
                         self.note_block_notes.insert((x, y, z), 1);
+                    }
+                }
+                // B7: Copper Bulb — toggle state on rising edge
+                if is_copper_bulb(block.id) && signal_changed && effective_power > 0 && prev_signal == Some(0) {
+                    let new_id = if block.id >= 1264 { block.id - 4 } else { block.id + 4 };
+                    if let Some(mut ch) = chunk_store.get_mut(&cp) {
+                        ch.set_block((x & 0xF) as usize, y, (z & 0xF) as usize, BlockState::new(new_id));
                     }
                 }
             }

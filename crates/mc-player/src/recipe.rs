@@ -109,6 +109,9 @@ impl RecipeRegistry {
         add_variant_recipes(self);
         // ═══ 26.2 Stonecutter conversion recipes ═══
         add_stonecutter_recipes(self);
+        // ═══ B6: Firework, tipped arrow, and shield recipes ═══
+        add_firework_recipes(self);
+        add_tipped_arrow_recipes(self);
     }
 
     fn add(&mut self, recipe: Recipe) {
@@ -3381,6 +3384,60 @@ fn add_stonecutter_recipes(reg: &mut RecipeRegistry) {
 
 fn concrete_ids(idx: u32) -> u32 {
     [1094,1095,1096,1097,1098,1099,1100,1101,1102,1103,1104,1105,1106,1107,1108,1109][idx as usize]
+}
+
+// ═══ B6: Firework + Tipped Arrow + Shield recipes ═══
+
+/// Firework star (gunpowder + dye) + firework rocket (paper + star + extra gunpowder)
+fn add_firework_recipes(reg: &mut RecipeRegistry) {
+    let dyes: [u32; 16] = [
+        879,880,881,882,883,884,885,886,887,888,889,890,891,892,893,894
+    ];
+    let gunpowder = 1001u32;
+    let paper = 1057u32;
+    let firework_star = 1374u32;
+    let firework_rocket = 1375u32;
+
+    for &dye in &dyes {
+        reg.add(Recipe {
+            id: format!("firework_star_{}", dye), group: "firework_star".into(),
+            category: 2, width: 0, height: 0,
+            ingredients: vec![vec![gunpowder], vec![dye]],
+            is_shapeless: true, result_item: firework_star, result_count: 1,
+        });
+    }
+    reg.add(Recipe {
+        id: "firework_rocket_1".into(), group: "firework_rocket".into(),
+        category: 2, width: 0, height: 0,
+        ingredients: vec![vec![paper], vec![gunpowder]],
+        is_shapeless: true, result_item: firework_rocket, result_count: 3,
+    });
+    reg.add(Recipe {
+        id: "firework_rocket_star".into(), group: "firework_rocket".into(),
+        category: 2, width: 0, height: 0,
+        ingredients: vec![vec![paper], vec![gunpowder], vec![firework_star]],
+        is_shapeless: true, result_item: firework_rocket, result_count: 3,
+    });
+}
+
+/// Tipped arrows: lingering potion + arrows → tipped arrows
+fn add_tipped_arrow_recipes(reg: &mut RecipeRegistry) {
+    let arrow = 923u32;
+    let tipped_arrow = 924u32;
+    let lingering_potion = 1125u32;
+
+    reg.add(Recipe {
+        id: "tipped_arrow".into(), group: "tipped_arrow".into(),
+        category: 2, width: 0, height: 0,
+        ingredients: vec![vec![lingering_potion], vec![arrow; 8]],
+        is_shapeless: true, result_item: tipped_arrow, result_count: 8,
+    });
+    reg.add(Recipe {
+        id: "tipped_arrow_water".into(), group: "tipped_arrow".into(),
+        category: 2, width: 0, height: 0,
+        ingredients: vec![vec![arrow; 8], vec![lingering_potion]],
+        is_shapeless: true, result_item: tipped_arrow, result_count: 8,
+    });
 }
 
 #[cfg(test)]

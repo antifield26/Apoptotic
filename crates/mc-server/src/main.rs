@@ -1,4 +1,6 @@
+mod anticheat;
 mod app;
+mod async_chunk;
 mod config;
 mod context;
 mod metrics;
@@ -18,6 +20,33 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
+
+/// IO affinity core for spawn_blocking tasks (-1 = disabled)
+static IO_AFFINITY_CORE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+/// Wraps tokio::task::spawn_blocking with CPU affinity pinning.
+/// On Linux, pins the blocking thread to IO_AFFINITY_CORE before running the closure.
+/// Use this instead of raw spawn_blocking for I/O tasks (chunk save, DB writes).
+pub async fn spawn_blocking_io<F, R>(f: F) -> Result<R, tokio::task::JoinError>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    tokio::task::spawn_blocking(move || {
+        #[cfg(target_os = "linux")]
+        {
+            let io_core = IO_AFFINITY_CORE.load(std::sync::atomic::Ordering::Relaxed);
+            if io_core >= 0 {
+                unsafe {
+                    let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
+                    libc::CPU_SET(io_core as usize, &mut cpuset);
+                    libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &cpuset);
+                }
+            }
+        }
+        f()
+    }).await
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -186,6 +215,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let fluid_engine = Arc::new(mc_world::fluid::FluidEngine::new());
     let chunk_store = mc_world::chunk_store::ChunkStore::new();
+
+    // Async chunk loading bridge (A5): decouples chunk generation from tick thread
+    let async_chunk_bridge = Arc::new(async_chunk::AsyncChunkBridge::new());
+    // Set runtime handle for spawn_blocking dispatch
+    async_chunk_bridge.set_runtime(tokio::runtime::Handle::current());
+
     let (shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
     let (save_trigger_tx, _) = broadcast::channel::<()>(1);
 
@@ -400,6 +435,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         furnace_manager: furnace_manager.clone(),
         plugin_manager: plugin_manager.clone(),
         plugin_ctx: plugin_ctx.clone(),
+        entity_broadcast_radius: app.config.performance.entity_broadcast_radius,
     };
     let gen_for_preload = cached_generator.clone();
 
@@ -494,6 +530,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // ── RPi 5: Configure Rayon thread pool + IO core affinity ──
+    // A1+A2: Set Rayon to chunk_threads (default 3 on RPi 5), saving 1 core for OS + tick.
+    // IO affinity wraps spawn_blocking to pin I/O tasks to the designated core.
+    {
+        let chunk_threads = app.config.performance.chunk_threads.max(1) as usize;
+        let io_core = app.config.performance.io_core_affinity;
+
+        // Configure Rayon global thread pool
+        if let Err(e) = rayon::ThreadPoolBuilder::new()
+            .num_threads(chunk_threads)
+            .thread_name(|i| format!("rayon-chunk-{}", i))
+            .build_global()
+        {
+            tracing::warn!("Rayon pool already initialized: {} (using existing pool)", e);
+        }
+        tracing::info!("Rayon: {} chunk threads ({} available via pool)", chunk_threads, rayon::current_num_threads());
+
+        // Store globally for spawn_blocking_io affinity wrapper
+        IO_AFFINITY_CORE.store(io_core as i32, std::sync::atomic::Ordering::Relaxed);
+        if io_core >= 0 {
+            tracing::info!("CPU affinity: I/O tasks pinned to core {}", io_core);
+        }
+    }
+
     // Game tick loop — runs on main thread
     let tick_rate = app.config.performance.tick_rate.clamp(1, 1000);
     let tick_interval_ms: u64 = (1000 / tick_rate) as u64;
@@ -501,34 +561,88 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut shutdown_rx_for_tick = shutdown_tx.subscribe();
     let mut save_trigger_rx = save_trigger_tx.subscribe();
 
-    // Capture handle for async I/O offloading
-    let io_handle = tokio::runtime::Handle::current();
+    // Async chunk loading bridge (A5) — local handles for the tick loop
+    let async_bridge = async_chunk_bridge.clone();
+    let async_gen: std::sync::Arc<dyn mc_world::generator::TerrainGenerator + Send + Sync> = cached_generator.clone();
+    let async_seed = world_seed;
+    let async_view_distance = app.config.world.view_distance as i32; // captured before server_ref move
 
+    // ═══ C5: Enhanced Ticker — Sprint / Freeze with TPS tracking ═══
     let mut tick_interval = tokio::time::interval(tokio::time::Duration::from_millis(tick_interval_ms));
     tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut tick_count: u64 = 0;
+    let mut was_frozen = false;
+    // TPS sliding window: track last 20 tick durations (microseconds)
+    let mut tps_window: [u64; 20] = [tick_interval_ms * 1000; 20];
+    let mut tps_window_idx = 0usize;
 
     loop {
         tokio::select! {
             _ = tick_interval.tick() => {
                 let tick_start = std::time::Instant::now();
-                // Check tick control
+                let sprint_rate;
+                // ── C5: Tick control (Sprint / Freeze) ──
                 {
                     let ws = world_state.read();
-                    if ws.tick_frozen { continue; }
-                    if ws.tick_sprint_rate > 0 {
-                        let new_interval = 1000 / ws.tick_sprint_rate as u64;
-                        if tick_interval.period().as_millis() as u64 != new_interval {
-                            drop(ws);
-                            tick_interval = tokio::time::interval(tokio::time::Duration::from_millis(new_interval));
-                            tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    if ws.tick_frozen {
+                        if !was_frozen {
+                            tracing::info!("⏸️ Ticker frozen (world paused)");
+                            was_frozen = true;
                         }
-                    } else if tick_interval.period().as_millis() as u64 != tick_interval_ms {
-                        tick_interval = tokio::time::interval(tokio::time::Duration::from_millis(tick_interval_ms));
-                        tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        continue;
+                    }
+                    if was_frozen {
+                        tracing::info!("▶️ Ticker resumed");
+                        was_frozen = false;
+                    }
+                    sprint_rate = ws.tick_sprint_rate;
+                }
+                // Adjust interval for sprint mode
+                let target_ms = if sprint_rate > 0 { (1000 / sprint_rate as u64).max(1) } else { tick_interval_ms };
+                if tick_interval.period().as_millis() as u64 != target_ms {
+                    tick_interval = tokio::time::interval(tokio::time::Duration::from_millis(target_ms));
+                    tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    if sprint_rate > 0 {
+                        tracing::info!("⚡ Ticker sprint: {} tps (interval={}ms)", sprint_rate, target_ms);
+                    } else {
+                        tracing::info!("Ticker normal: {} tps (interval={}ms)", tick_rate, target_ms);
                     }
                 }
                 tick_count = tick_count.wrapping_add(1);
+
+                // Drain async chunk loading results (A5)
+                // Non-blocking: picks up chunks loaded by background Rayon tasks
+                async_bridge.drain_completed(&chunk_store);
+
+                // Enqueue missing chunks for async loading (every 10 ticks, per-player)
+                // Avoids synchronous I/O in the connection handler for new chunks
+                if tick_count.is_multiple_of(10) {
+                    let mut needed: Vec<(mc_core::position::ChunkPos, u8)> = Vec::with_capacity(64);
+                    for player in player_manager.all_players() {
+                        let pcx = (player.position.x.floor() as i32).div_euclid(16);
+                        let pcz = (player.position.z.floor() as i32).div_euclid(16);
+                        let vd = async_view_distance + 2; // load 2 extra chunks ahead
+                        for dx in -vd..=vd {
+                            for dz in -vd..=vd {
+                                let pos = mc_core::position::ChunkPos::new(pcx + dx, pcz + dz);
+                                let dist = std::cmp::max(dx.unsigned_abs(), dz.unsigned_abs());
+                                let priority = if dist <= 2 { 2u8 } else if dist <= 6 { 1u8 } else { 0u8 };
+                                needed.push((pos, priority));
+                            }
+                        }
+                    }
+                    if !needed.is_empty() {
+                        let cs = chunk_store.clone();
+                        let generator = async_gen.clone();
+                        let seed = async_seed;
+                        let bridge = async_bridge.clone();
+                        // Offload the enqueue + dispatch to a non-blocking task
+                        tokio::task::spawn(async move {
+                            bridge.enqueue(&needed, &cs, generator, seed);
+                        });
+                    }
+                }
 
                 // 推进世界时间
                 world_state.write().add_time(1);
@@ -953,7 +1067,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             tame_attempts: 0, is_baby: false, in_love_ticks: 0,
                                             breed_cooldown: 0, is_sheared: false,
                                             path: vec![], path_last_tick: 0,
-                                            is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+                                            is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
                                         };
                                         mob_manager.register(cloud);
                                     }
@@ -1049,7 +1163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         tame_attempts: 0, is_baby: false, in_love_ticks: 0,
                                         breed_cooldown: 0, is_sheared: false,
                                         path: vec![], path_last_tick: 0,
-                                        is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+                                        is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
                                     };
                                     mob_manager.register(tracked);
                                     player_manager.broadcast_mob_spawn(eid, mob_uuid, *mob_type, pos.x, pos.y, pos.z);
@@ -1074,6 +1188,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tick::tick_portal_detection(&player_manager, &chunk_store, &advancement_tracker, &advancement_registry);
                 }
 
+                // C8: Item merge — combine nearby same-type items (PaperMC merge-radius)
+                // Runs every 40 ticks (2s) to balance merge benefit vs CPU cost
+                if tick_count.is_multiple_of(40) {
+                    let mut drops = dropped_for_tick.write();
+                    let merge_radius_sq = 4.0_f64; // 2.0 blocks
+                    let mut to_remove: Vec<i32> = Vec::new();
+                    let keys: Vec<i32> = drops.keys().copied().collect();
+                    for i in 0..keys.len() {
+                        if to_remove.contains(&keys[i]) { continue; }
+                        let (item_a, xa, ya, za) = match drops.get(&keys[i]) {
+                            Some(v) => *v,
+                            None => continue,
+                        };
+                        for j in (i+1)..keys.len() {
+                            if to_remove.contains(&keys[j]) { continue; }
+                            let (item_b, xb, yb, zb) = match drops.get(&keys[j]) {
+                                Some(v) => *v,
+                                None => continue,
+                            };
+                            if item_a == item_b {
+                                let dx = xa - xb; let dy = ya - yb; let dz = za - zb;
+                                if dx*dx + dy*dy + dz*dz < merge_radius_sq {
+                                    to_remove.push(keys[j]);
+                                    // Merge into the first item — move it to midpoint
+                                    drops.insert(keys[i], (item_a, (xa + xb) / 2.0, (ya + yb) / 2.0, (za + zb) / 2.0));
+                                }
+                            }
+                        }
+                    }
+                    for eid in &to_remove {
+                        drops.remove(eid);
+                        player_manager.broadcast_mob_despawn(*eid, uuid::Uuid::new_v4());
+                    }
+                    if !to_remove.is_empty() {
+                        tracing::debug!("Item merge: combined {} stacks", to_remove.len());
+                    }
+                }
                 // Item entity attraction: pull dropped items toward nearby players
                 {
                     let mut drops = dropped_for_tick.write();
@@ -1322,6 +1473,90 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             player_manager.broadcast_mob_spawn(eid, uuid::Uuid::new_v4(), 53, ox, pos.1 + 1.0, oz);
                         }
                         next_entity_id_for_tick.store(ent_id, std::sync::atomic::Ordering::Relaxed);
+
+                        // ── 26.2 death effects (B2) ──
+                        // WindCharged (35): creates a wind burst, launching nearby entities
+                        if player_manager.get_effect_level(uuid, 35) > 0 {
+                            let amp = player_manager.get_effect_level(uuid, 35) as f64;
+                            for p in player_manager.all_players() {
+                                let dx = p.position.x - pos.0;
+                                let dy = p.position.y - pos.1;
+                                let dz = p.position.z - pos.2;
+                                let dist = (dx*dx + dy*dy + dz*dz).sqrt().max(0.01);
+                                if dist < 6.0 {
+                                    let knockback = (3.0 + amp) * (1.0 - dist / 6.0);
+                                    let nx = dx / dist; let ny = 0.5; let nz = dz / dist;
+                                    let _ = player_manager.update_position_full(
+                                        &p.uuid,
+                                        p.position.x + nx * knockback,
+                                        (p.position.y + ny * knockback).max(0.0),
+                                        p.position.z + nz * knockback,
+                                        p.position.yaw, p.position.pitch,
+                                    );
+                                }
+                            }
+                        }
+                        // Weaving (36): places cobwebs at death location
+                        if player_manager.get_effect_level(uuid, 36) > 0 {
+                            let amp = player_manager.get_effect_level(uuid, 36) as i32;
+                            let cp = mc_core::position::ChunkPos::new(pos.0 as i32 >> 4, pos.2 as i32 >> 4);
+                            let cobweb = mc_core::block::BlockState::new(100); // cobweb block ID
+                            for _ in 0..(2 + amp) {
+                                let cx = (pos.0 as i32 + fastrand::i32(-2..=2)).clamp(-30000000, 29999999);
+                                let cy = (pos.1 as i32 + fastrand::i32(0..=2)).clamp(-64, 319);
+                                let cz = (pos.2 as i32 + fastrand::i32(-2..=2)).clamp(-30000000, 29999999);
+                                let ccp = mc_core::position::ChunkPos::new(cx >> 4, cz >> 4);
+                                if let Some(mut chunk) = chunk_store.get_mut(&ccp) {
+                                    let block = chunk.get_block((cx & 0xF) as usize, cy, (cz & 0xF) as usize);
+                                    if block.is_air() || block.id == 0 {
+                                        chunk.set_block((cx & 0xF) as usize, cy, (cz & 0xF) as usize, cobweb);
+                                        dirty_blocks_for_tick.mark_block(cx, cy, cz, cobweb.id);
+                                    }
+                                }
+                            }
+                        }
+                        // Oozing (37): spawns 2 slimes per level at death location
+                        if player_manager.get_effect_level(uuid, 37) > 0 {
+                            let amp = player_manager.get_effect_level(uuid, 37) as i32;
+                            let slime_count = 2 * amp;
+                            for _ in 0..slime_count {
+                                let eid = ent_id; ent_id += 1;
+                                let ox = pos.0 + (fastrand::f64() - 0.5) * 2.0;
+                                let oz = pos.2 + (fastrand::f64() - 0.5) * 2.0;
+                                let slime_mob = mc_player::mob::TrackedMob {
+                                    entity_id: eid,
+                                    uuid: uuid::Uuid::new_v4(),
+                                    mob_type: 117, // SLIME
+                                    position: mc_core::position::Position::new(ox, pos.1, oz),
+                                    health: mc_player::mob::mob_max_health(117),
+                                    max_health: mc_player::mob::mob_max_health(117),
+                                    age_ticks: 0,
+                                    ai_timer: 0,
+                                    ai_state: mc_player::mob::MobAiState::Idle,
+                                    attack_cooldown: 0,
+                                    last_sync_tick: 0,
+                                    owner_uuid: None,
+                                    is_tamed: false,
+                                    is_sitting: false,
+                                    tame_attempts: 0,
+                                    is_baby: false,
+                                    in_love_ticks: 0,
+                                    breed_cooldown: 0,
+                                    is_sheared: false,
+                                    path: vec![],
+                                    path_last_tick: 0,
+                                    is_on_fire: false,
+                                    is_in_water: false,
+                                    sulfur_cube_archetype: None,
+                                    absorbed_block_id: None,
+                                    is_small_cube: false, dirty_flags: 3,
+                                };
+                                mob_manager.insert_mob(slime_mob);
+                                player_manager.broadcast_mob_spawn(eid, uuid::Uuid::new_v4(), 117, ox, pos.1, oz);
+                            }
+                        }
+                        next_entity_id_for_tick.store(ent_id, std::sync::atomic::Ordering::Relaxed);
+
                         // Respawn
                         let _ = player_manager.set_health(uuid, 20.0);
                         let _ = player_manager.update_position_full(uuid, spawn_pos.0, spawn_pos.1, spawn_pos.2, 0.0, 0.0);
@@ -1404,7 +1639,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     is_baby: false,
                                     in_love_ticks: 0,
                                     breed_cooldown: 0,
-                                    is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
+                                    is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
                                 };
                                 mob_manager.register(tracked);
                                 player_manager.broadcast_mob_spawn(eid, mob_uuid, mob_type, sx, spawn_y, sz);
@@ -1457,7 +1692,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     max_health: mc_player::mob::mob_max_health(mob_type),
                                     age_ticks: 0, ai_timer: 40 + fastrand::u64(..) % 61,
                                     ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                    owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
+                                    owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
                                 };
                                 mob_manager.register(tracked);
                                 player_manager.broadcast_mob_spawn(eid, mob_uuid, mob_type, sx, spawn_y, sz);
@@ -1501,7 +1736,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         health: 20.0, max_health: 20.0,
                                         age_ticks: 0, ai_timer: 200,
                                         ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                        owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
+                                        owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
                                     };
                                     mob_manager.register(baby);
                                     break; // one baby per cycle
@@ -1519,7 +1754,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 health: 100.0, max_health: 100.0,
                                 age_ticks: 0, ai_timer: 80,
                                 ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false,
+                                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
                             };
                             mob_manager.register(golem);
                         }
@@ -1565,15 +1800,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     mc_network::rate_limiter::cleanup_stale_rate_limits();
                 }
 
-                // 定期自动保存 (LZ4 Linear 格式优先) — 异步 I/O
+                // Proactive dirty chunk writeback (A3): flush oldest dirty chunks
+                // when >80% of max_chunks are dirty, to prevent OOM from dirty-only LRU.
+                // Runs every 200 ticks (10s) to balance I/O overhead.
+                if tick_count.is_multiple_of(200) {
+                    let cs = chunk_store.clone();
+                    let _ = spawn_blocking_io(move || {
+                        cs.proactive_writeback();
+                    });
+                }
+
+                // 定期自动保存 (LZ4 Linear 格式优先) — 异步 I/O with affinity
                 if save_interval_ticks > 0 && tick_count.is_multiple_of(save_interval_ticks) {
                     let dirty = chunk_store.dirty_chunks();
                     if !dirty.is_empty() {
                         let wd = world_dir.clone();
                         let cs = chunk_store.clone();
                         let tc = tick_count;
-                        // Offload disk I/O to blocking thread pool
-                        io_handle.spawn_blocking(move || {
+                        // Offload disk I/O to I/O-pinned blocking thread (A1: CPU affinity)
+                        let _ = spawn_blocking_io(move || {
                             let count = mc_world::chunk_store::save_dirty_chunks_linear(&dirty, &wd);
                             if count > 0 {
                                 tracing::debug!("LZ4 async-saved {} chunks (tick {})", count, tc);
@@ -1620,7 +1865,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     save_manager.save_world(&world);
                 }
                 // Record tick duration for TPS metrics
+                // TPS tracking (C5): sliding window of last 20 tick durations
                 let tick_elapsed_us = tick_start.elapsed().as_micros() as u64;
+                tps_window[tps_window_idx] = tick_elapsed_us;
+                tps_window_idx = (tps_window_idx + 1) % 20;
+                // Log TPS every 600 ticks (~30s) + memory budget (D5)
+                if tick_count % 600 == 0 {
+                    let avg_us: u64 = tps_window.iter().sum::<u64>() / 20;
+                    let tps = if avg_us > 0 { 1_000_000.0 / avg_us as f64 } else { 20.0 };
+                    // D5: memory budget status
+                    let (used_mb, max_mb, usage_pct) = chunk_store.memory_budget_status(
+                        app.config.performance.max_memory_mb.unwrap_or(512) as usize
+                    );
+                    if tps < 18.0 || usage_pct > 75.0 {
+                        tracing::warn!("⚠️ TPS {:.1} | Memory: {}/{} MB ({:.0}%) | Chunks: {} | Entities: {}",
+                            tps, used_mb, max_mb, usage_pct, chunk_store.count(),
+                            mob_manager.count());
+                    }
+                }
                 metrics::record_tick(tick_elapsed_us);
             }
             _ = save_trigger_rx.recv() => {

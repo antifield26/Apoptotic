@@ -1,0 +1,26 @@
+# Apoptotic Plugin Registry (E3)
+# Community plugin index for the plugin marketplace.
+# Add your plugin here for discovery via the /plugins command.
+
+[registry]
+name = "Apoptotic Community Plugins"
+url = "https://github.com/antifield26/Apoptotic"
+
+# Built-in plugins (shipped with server)
+[[plugins]]
+name = "Core"
+version = "1.0.0"
+author = "mc-server"
+description = "Built-in core plugin — lifecycle hooks + player events"
+kind = "native"
+enabled = true
+
+# Example community plugin templates:
+# [[plugins]]
+# name = "Home"
+# version = "0.1.0"
+# author = "community"
+# description = "Set and teleport to home locations"
+# kind = "wasm"
+# source = "https://github.com/example/apoptotic-home/releases/latest/download/home.wasm"
+# enabled = false

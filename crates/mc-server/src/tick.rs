@@ -177,10 +177,12 @@ pub fn tick_environmental_damage(pm: &SharedPlayerManager, cs: &ChunkStore) -> u
             if let Some(chunk) = cs.get(&cp) {
                 let head_block = chunk.get_block((px & 0xF) as usize, py, (pz & 0xF) as usize);
                 if head_block.id == 267 || head_block.id == 268 {
-                    // ConduitPower (29): grants complete drowning immunity while active
-                    // WaterBreathing (13): also prevents drowning
-                    let has_water_breathing = pm.get_effect_level(&p.uuid, 13) > 0
-                        || pm.get_effect_level(&p.uuid, 29) > 0; // ConduitPower
+                    // ConduitPower (28): grants complete drowning immunity while active
+                    // WaterBreathing (12): also prevents drowning
+                    // BreathOfTheNautilus (39): enhanced underwater breathing + drowning immunity
+                    let has_water_breathing = pm.get_effect_level(&p.uuid, 12) > 0
+                        || pm.get_effect_level(&p.uuid, 28) > 0
+                        || pm.get_effect_level(&p.uuid, 39) > 0;
                     if !has_water_breathing {
                         // Respiration enchantment: reduce drowning damage probability
                         let respiration_lvl = pm.get_armor_enchant_level(&p.uuid, 39, "respiration");
@@ -256,29 +258,70 @@ pub fn tick_hostile_spawning(
              w.seed)
         };
         if !can_spawn { return; }
-        if mob_mgr.count_hostile() >= 50 + pm.online_count() * 10 { return; }
+        // C3: Per-player mob cap — each player gets a fair share of the cap
+        let online = pm.online_count().max(1) as usize;
+        let global_max = 50 + online * 10;
+        if mob_mgr.count_hostile() >= global_max { return; }
+        let per_player_cap = (global_max / online) as i32; // fair share per player
+
+        // C7: Chunk spawn failure tracking — skip chunks that repeatedly fail
+        // Uses a DashMap to track (chunk_pos, consecutive_failures)
+        static FAILED_SPAWN_CHUNKS: std::sync::LazyLock<dashmap::DashMap<mc_core::position::ChunkPos, u8>> =
+            std::sync::LazyLock::new(dashmap::DashMap::new);
 
         for player in pm.all_players() {
+            // C3: Check per-player mob count
+            let near_mobs = mob_mgr.count_near((player.position.x as i32).div_euclid(16), (player.position.z as i32).div_euclid(16));
+            if near_mobs >= per_player_cap { continue; }
+
             if !fastrand::u32(..).is_multiple_of(3) { continue; }
             let angle = fastrand::f64() * std::f64::consts::TAU;
             let dist = 8.0 + fastrand::f64() * 16.0;
             let sx = player.position.x + angle.cos() * dist;
             let sz = player.position.z + angle.sin() * dist;
             let cp = mc_core::position::ChunkPos::new((sx as i32).div_euclid(16), (sz as i32).div_euclid(16));
+
+            // C7: Skip chunks that have repeatedly failed spawns
+            if let Some(fail_count) = FAILED_SPAWN_CHUNKS.get(&cp)
+                && *fail_count >= 5 {
+                    continue; // too many failures — skip this chunk
+                }
+
             let spawn_y = if let Some(chunk) = cs.get(&cp) {
                 let lx = (sx as i32).rem_euclid(16) as usize;
                 let lz = (sz as i32).rem_euclid(16) as usize;
                 let h = chunk.height_at(lx, lz);
-                if chunk.combined_light(lx, h - 1, lz) > 7 { continue; }
-                if !chunk.is_spawn_surface(lx, h - 1, lz) { continue; }
+                if chunk.combined_light(lx, h - 1, lz) > 7 {
+                    // C7: Track failure — too bright
+                    let mut entry = FAILED_SPAWN_CHUNKS.entry(cp).or_insert(0);
+                    *entry += 1;
+                    continue;
+                }
+                if !chunk.is_spawn_surface(lx, h - 1, lz) {
+                    // C7: Track failure — no valid surface
+                    let mut entry = FAILED_SPAWN_CHUNKS.entry(cp).or_insert(0);
+                    *entry += 1;
+                    continue;
+                }
+                // Spawn succeeded — reset failure counter
+                FAILED_SPAWN_CHUNKS.remove(&cp);
                 h as f64
-            } else { 64.0 };
+            } else {
+                let mut entry = FAILED_SPAWN_CHUNKS.entry(cp).or_insert(0);
+                *entry += 1;
+                64.0
+            };
             let biome = mc_world::generator::sample_biome(sx as i32, sz as i32, seed);
             let mob_type = pick_hostile_mob(biome);
             let eid = next_eid.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let tracked = make_tracked_mob(eid, mob_type, sx, spawn_y, sz);
             mob_mgr.register(tracked);
             pm.broadcast_mob_spawn(eid, uuid::Uuid::new_v4(), mob_type, sx, spawn_y, sz);
+        }
+
+        // C7: Periodically clean stale failure entries (every 600 ticks accessible via tick counter)
+        if fastrand::u32(0..600) == 0 {
+            FAILED_SPAWN_CHUNKS.retain(|_, v| *v < 3); // keep only chunks with recent failures
         }
     })
 }
@@ -331,6 +374,7 @@ fn make_tracked_mob(eid: i32, mob_type: i32, x: f64, y: f64, z: f64) -> mc_playe
         is_on_fire: false, is_in_water: false,
         path: Vec::new(), path_last_tick: 0,
         sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
+        dirty_flags: mc_player::mob::TrackedMob::DIRTY_ALL, // C4: new entity needs full sync
     }
 }
 
