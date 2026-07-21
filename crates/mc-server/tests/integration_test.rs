@@ -150,7 +150,7 @@ fn test_mob_manager_register_remove() {
     let mob = TrackedMob {
         entity_id: 100,
         uuid: uuid::Uuid::new_v4(),
-        mob_type: 36, // zombie
+        mob_type: 151, // zombie (official 26.2 ID)
         position: Position::new(0.0, 64.0, 0.0),
         health: 20.0,
         max_health: 20.0,
@@ -182,7 +182,7 @@ fn test_mob_manager_damage() {
     let mob = TrackedMob {
         entity_id: 200,
         uuid: uuid::Uuid::new_v4(),
-        mob_type: 36,
+        mob_type: 151, // zombie
         position: Position::new(0.0, 64.0, 0.0),
         health: 20.0,
         max_health: 20.0,
@@ -225,11 +225,11 @@ fn test_recipe_matching_2x2() {
 /// 测试: 容器窗口类型映射
 #[test]
 fn test_container_window_types() {
-    assert_eq!(mc_player::container::container_window_type(54), 2);  // chest
-    assert_eq!(mc_player::container::container_window_type(61), 3);  // furnace
-    assert_eq!(mc_player::container::container_window_type(113), 6); // crafting_table
-    assert_eq!(mc_player::container::container_window_type(117), 10); // brewing_stand
-    assert_eq!(mc_player::container::container_window_type(151), 7);  // enchanting_table
+    assert_eq!(mc_player::container::container_window_type(201), 2);  // chest
+    assert_eq!(mc_player::container::container_window_type(209), 3);  // furnace
+    assert_eq!(mc_player::container::container_window_type(206), 6); // crafting_table
+    assert_eq!(mc_player::container::container_window_type(879), 10); // brewing_stand
+    assert_eq!(mc_player::container::container_window_type(880), 7);  // enchanting_table
 }
 
 /// 测试: 生物群系采样覆盖

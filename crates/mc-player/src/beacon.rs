@@ -28,17 +28,17 @@ impl BeaconData {
     /// 可用的主效果 (按金字塔等级)
     pub fn available_effects(level: u8) -> &'static [(u32, &'static str)] {
         match level {
-            1 => &[(1, "Speed"), (3, "Haste")],
-            2 => &[(1, "Speed"), (3, "Haste"), (11, "Resistance"), (8, "Jump Boost")],
-            3 => &[(1, "Speed"), (3, "Haste"), (11, "Resistance"), (8, "Jump Boost"), (5, "Strength")],
-            _ => &[(1, "Speed"), (3, "Haste"), (11, "Resistance"), (8, "Jump Boost"), (5, "Strength")],
+            1 => &[(0, "Speed"), (2, "Haste")],
+            2 => &[(0, "Speed"), (2, "Haste"), (10, "Resistance"), (7, "Jump Boost")],
+            3 => &[(0, "Speed"), (2, "Haste"), (10, "Resistance"), (7, "Jump Boost"), (4, "Strength")],
+            _ => &[(0, "Speed"), (2, "Haste"), (10, "Resistance"), (7, "Jump Boost"), (4, "Strength")],
         }
     }
 
     /// 副效果 (仅 4 层可选, 与主效果不同)
     pub fn available_secondary(level: u8) -> &'static [(u32, &'static str)] {
         if level >= 4 {
-            &[(1, "Speed"), (3, "Haste"), (11, "Resistance"), (8, "Jump Boost"), (5, "Strength"), (10, "Regeneration")]
+            &[(0, "Speed"), (2, "Haste"), (10, "Resistance"), (7, "Jump Boost"), (4, "Strength"), (9, "Regeneration")]
         } else {
             &[]
         }
@@ -205,7 +205,7 @@ impl BeaconManager {
                     // 应用副效果 (仅 4 层)
                     if beacon.pyramid_level >= 4
                         && let Some(effect_id) = beacon.secondary_effect {
-                            let amplifier = if effect_id == 10 { 1u8 } else { 0u8 };
+                            let amplifier = if effect_id == 9 { 1u8 } else { 0u8 }; // Regeneration (0-based ID 9)
                             if let Some(effect) = mc_core::effect::EffectType::from_id(effect_id as u8) {
                                 let active = mc_core::effect::ActiveEffect::new(effect, amplifier, 240);
                                 let _ = player_manager.add_effect(&player.uuid, active);

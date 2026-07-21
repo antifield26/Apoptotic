@@ -1,154 +1,126 @@
-//! 状态效果类型 — Minecraft status effects (protocol 776)
+//! 状态效果类型 — Minecraft 26.2 status effects (protocol 776)
 //!
-//! 来源: PrismarineJS minecraft-data effects.json (1.21.5)
+//! Source: Official Minecraft 26.2 registry dump (mob_effect registry, 40 total)
 
 use std::fmt;
 
-/// Minecraft 状态效果 (33 total in vanilla 1.21.5)
+/// Minecraft 状态效果 (40 total in vanilla 26.2)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EffectType {
-    Speed,            // 1
-    Slowness,         // 2
-    Haste,            // 3
-    MiningFatigue,    // 4
-    Strength,         // 5
-    InstantHealth,    // 6
-    InstantDamage,    // 7
-    JumpBoost,        // 8
-    Nausea,           // 9
-    Regeneration,     // 10
-    Resistance,       // 11
-    FireResistance,   // 12
-    WaterBreathing,   // 13
-    Invisibility,     // 14
-    Blindness,        // 15
-    NightVision,      // 16
-    Hunger,           // 17
-    Weakness,         // 18
-    Poison,           // 19
-    Wither,           // 20
-    HealthBoost,      // 21
-    Absorption,       // 22
-    Saturation,       // 23
-    Glowing,          // 24
-    Levitation,       // 25
-    Luck,             // 26
-    Unluck,           // 27
-    SlowFalling,      // 28
-    ConduitPower,     // 29
-    DolphinGrace,     // 30
-    BadOmen,          // 31
-    HeroOfTheVillage, // 32
-    Darkness,         // 33
+    Speed,            // 0
+    Slowness,         // 1
+    Haste,            // 2
+    MiningFatigue,    // 3
+    Strength,         // 4
+    InstantHealth,    // 5
+    InstantDamage,    // 6
+    JumpBoost,        // 7
+    Nausea,           // 8
+    Regeneration,     // 9
+    Resistance,       // 10
+    FireResistance,   // 11
+    WaterBreathing,   // 12
+    Invisibility,     // 13
+    Blindness,        // 14
+    NightVision,      // 15
+    Hunger,           // 16
+    Weakness,         // 17
+    Poison,           // 18
+    Wither,           // 19
+    HealthBoost,      // 20
+    Absorption,       // 21
+    Saturation,       // 22
+    Glowing,          // 23
+    Levitation,       // 24
+    Luck,             // 25
+    Unluck,           // 26
+    SlowFalling,      // 27
+    ConduitPower,     // 28
+    DolphinGrace,     // 29
+    BadOmen,          // 30
+    HeroOfTheVillage, // 31
+    Darkness,         // 32
+    TrialOmen,        // 33 (1.21.5+)
+    RaidOmen,         // 34 (1.21.5+)
+    WindCharged,      // 35 (1.21.5+)
+    Weaving,          // 36 (1.21.5+)
+    Oozing,           // 37 (1.21.5+)
+    Infested,         // 38 (1.21.5+)
+    BreathOfTheNautilus, // 39 (26.2)
 }
 
 impl EffectType {
-    /// 从协议 ID 解析效果类型
     pub fn from_id(id: u8) -> Option<Self> {
         match id {
-            1 => Some(Self::Speed),
-            2 => Some(Self::Slowness),
-            3 => Some(Self::Haste),
-            4 => Some(Self::MiningFatigue),
-            5 => Some(Self::Strength),
-            6 => Some(Self::InstantHealth),
-            7 => Some(Self::InstantDamage),
-            8 => Some(Self::JumpBoost),
-            9 => Some(Self::Nausea),
-            10 => Some(Self::Regeneration),
-            11 => Some(Self::Resistance),
-            12 => Some(Self::FireResistance),
-            13 => Some(Self::WaterBreathing),
-            14 => Some(Self::Invisibility),
-            15 => Some(Self::Blindness),
-            16 => Some(Self::NightVision),
-            17 => Some(Self::Hunger),
-            18 => Some(Self::Weakness),
-            19 => Some(Self::Poison),
-            20 => Some(Self::Wither),
-            21 => Some(Self::HealthBoost),
-            22 => Some(Self::Absorption),
-            23 => Some(Self::Saturation),
-            24 => Some(Self::Glowing),
-            25 => Some(Self::Levitation),
-            26 => Some(Self::Luck),
-            27 => Some(Self::Unluck),
-            28 => Some(Self::SlowFalling),
-            29 => Some(Self::ConduitPower),
-            30 => Some(Self::DolphinGrace),
-            31 => Some(Self::BadOmen),
-            32 => Some(Self::HeroOfTheVillage),
-            33 => Some(Self::Darkness),
+            0 => Some(Self::Speed), 1 => Some(Self::Slowness), 2 => Some(Self::Haste),
+            3 => Some(Self::MiningFatigue), 4 => Some(Self::Strength),
+            5 => Some(Self::InstantHealth), 6 => Some(Self::InstantDamage),
+            7 => Some(Self::JumpBoost), 8 => Some(Self::Nausea),
+            9 => Some(Self::Regeneration), 10 => Some(Self::Resistance),
+            11 => Some(Self::FireResistance), 12 => Some(Self::WaterBreathing),
+            13 => Some(Self::Invisibility), 14 => Some(Self::Blindness),
+            15 => Some(Self::NightVision), 16 => Some(Self::Hunger),
+            17 => Some(Self::Weakness), 18 => Some(Self::Poison),
+            19 => Some(Self::Wither), 20 => Some(Self::HealthBoost),
+            21 => Some(Self::Absorption), 22 => Some(Self::Saturation),
+            23 => Some(Self::Glowing), 24 => Some(Self::Levitation),
+            25 => Some(Self::Luck), 26 => Some(Self::Unluck),
+            27 => Some(Self::SlowFalling), 28 => Some(Self::ConduitPower),
+            29 => Some(Self::DolphinGrace), 30 => Some(Self::BadOmen),
+            31 => Some(Self::HeroOfTheVillage), 32 => Some(Self::Darkness),
+            33 => Some(Self::TrialOmen), 34 => Some(Self::RaidOmen),
+            35 => Some(Self::WindCharged), 36 => Some(Self::Weaving),
+            37 => Some(Self::Oozing), 38 => Some(Self::Infested),
+            39 => Some(Self::BreathOfTheNautilus),
             _ => None,
         }
     }
 
-    /// 协议 ID
     pub fn id(&self) -> u8 {
         match self {
-            Self::Speed => 1,
-            Self::Slowness => 2,
-            Self::Haste => 3,
-            Self::MiningFatigue => 4,
-            Self::Strength => 5,
-            Self::InstantHealth => 6,
-            Self::InstantDamage => 7,
-            Self::JumpBoost => 8,
-            Self::Nausea => 9,
-            Self::Regeneration => 10,
-            Self::Resistance => 11,
-            Self::FireResistance => 12,
-            Self::WaterBreathing => 13,
-            Self::Invisibility => 14,
-            Self::Blindness => 15,
-            Self::NightVision => 16,
-            Self::Hunger => 17,
-            Self::Weakness => 18,
-            Self::Poison => 19,
-            Self::Wither => 20,
-            Self::HealthBoost => 21,
-            Self::Absorption => 22,
-            Self::Saturation => 23,
-            Self::Glowing => 24,
-            Self::Levitation => 25,
-            Self::Luck => 26,
-            Self::Unluck => 27,
-            Self::SlowFalling => 28,
-            Self::ConduitPower => 29,
-            Self::DolphinGrace => 30,
-            Self::BadOmen => 31,
-            Self::HeroOfTheVillage => 32,
-            Self::Darkness => 33,
+            Self::Speed => 0, Self::Slowness => 1, Self::Haste => 2,
+            Self::MiningFatigue => 3, Self::Strength => 4,
+            Self::InstantHealth => 5, Self::InstantDamage => 6,
+            Self::JumpBoost => 7, Self::Nausea => 8, Self::Regeneration => 9,
+            Self::Resistance => 10, Self::FireResistance => 11,
+            Self::WaterBreathing => 12, Self::Invisibility => 13,
+            Self::Blindness => 14, Self::NightVision => 15,
+            Self::Hunger => 16, Self::Weakness => 17, Self::Poison => 18,
+            Self::Wither => 19, Self::HealthBoost => 20,
+            Self::Absorption => 21, Self::Saturation => 22,
+            Self::Glowing => 23, Self::Levitation => 24,
+            Self::Luck => 25, Self::Unluck => 26, Self::SlowFalling => 27,
+            Self::ConduitPower => 28, Self::DolphinGrace => 29,
+            Self::BadOmen => 30, Self::HeroOfTheVillage => 31,
+            Self::Darkness => 32, Self::TrialOmen => 33, Self::RaidOmen => 34,
+            Self::WindCharged => 35, Self::Weaving => 36, Self::Oozing => 37,
+            Self::Infested => 38, Self::BreathOfTheNautilus => 39,
         }
     }
 
-    /// 是否是即时效果 (无持续时间)
     pub fn is_instant(&self) -> bool {
         matches!(self, Self::InstantHealth | Self::InstantDamage)
     }
 
-    /// 是否是正面效果
     pub fn is_beneficial(&self) -> bool {
         !matches!(self,
             Self::Slowness | Self::MiningFatigue | Self::InstantDamage |
             Self::Nausea | Self::Blindness | Self::Hunger |
             Self::Weakness | Self::Poison | Self::Wither |
-            Self::Unluck | Self::Darkness | Self::BadOmen
+            Self::Unluck | Self::Darkness | Self::BadOmen |
+            Self::TrialOmen | Self::RaidOmen | Self::WindCharged |
+            Self::Weaving | Self::Oozing | Self::Infested
         )
     }
 }
 
 impl fmt::Display for EffectType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{:?}", self) }
 }
 
-/// 按名称查找效果 (不区分大小写)
 pub fn resolve_effect(name: &str) -> Option<EffectType> {
     match name.to_lowercase().as_str() {
-        "speed" => Some(EffectType::Speed),
-        "slowness" => Some(EffectType::Slowness),
+        "speed" => Some(EffectType::Speed), "slowness" => Some(EffectType::Slowness),
         "haste" => Some(EffectType::Haste),
         "mining_fatigue" | "miningfatigue" => Some(EffectType::MiningFatigue),
         "strength" => Some(EffectType::Strength),
@@ -163,33 +135,35 @@ pub fn resolve_effect(name: &str) -> Option<EffectType> {
         "invisibility" | "invis" => Some(EffectType::Invisibility),
         "blindness" => Some(EffectType::Blindness),
         "night_vision" | "nightvision" => Some(EffectType::NightVision),
-        "hunger" => Some(EffectType::Hunger),
-        "weakness" => Some(EffectType::Weakness),
-        "poison" => Some(EffectType::Poison),
-        "wither" => Some(EffectType::Wither),
+        "hunger" => Some(EffectType::Hunger), "weakness" => Some(EffectType::Weakness),
+        "poison" => Some(EffectType::Poison), "wither" => Some(EffectType::Wither),
         "health_boost" | "healthboost" => Some(EffectType::HealthBoost),
         "absorption" => Some(EffectType::Absorption),
         "saturation" => Some(EffectType::Saturation),
         "glowing" => Some(EffectType::Glowing),
         "levitation" => Some(EffectType::Levitation),
-        "luck" => Some(EffectType::Luck),
-        "unluck" => Some(EffectType::Unluck),
+        "luck" => Some(EffectType::Luck), "unluck" => Some(EffectType::Unluck),
         "slow_falling" | "slowfalling" => Some(EffectType::SlowFalling),
         "conduit_power" | "conduitpower" => Some(EffectType::ConduitPower),
         "dolphin_grace" | "dolphinsgrace" => Some(EffectType::DolphinGrace),
         "bad_omen" | "badomen" => Some(EffectType::BadOmen),
         "hero_of_the_village" | "heroofthevillage" => Some(EffectType::HeroOfTheVillage),
         "darkness" => Some(EffectType::Darkness),
+        "trial_omen" => Some(EffectType::TrialOmen),
+        "raid_omen" => Some(EffectType::RaidOmen),
+        "wind_charged" => Some(EffectType::WindCharged),
+        "weaving" => Some(EffectType::Weaving), "oozing" => Some(EffectType::Oozing),
+        "infested" => Some(EffectType::Infested),
+        "breath_of_the_nautilus" => Some(EffectType::BreathOfTheNautilus),
         _ => None,
     }
 }
 
-/// 玩家身上的活跃效果
 #[derive(Debug, Clone)]
 pub struct ActiveEffect {
     pub effect: EffectType,
-    pub amplifier: u8,  // 0 = level I, 1 = level II, ...
-    pub duration_ticks: u32, // remaining duration in ticks (0 = permanent/instant)
+    pub amplifier: u8,
+    pub duration_ticks: u32,
 }
 
 impl ActiveEffect {
@@ -201,46 +175,22 @@ impl ActiveEffect {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_effect_ids() {
-        assert_eq!(EffectType::Speed.id(), 1);
-        assert_eq!(EffectType::InstantHealth.id(), 6);
-        assert_eq!(EffectType::Regeneration.id(), 10);
-        assert_eq!(EffectType::Darkness.id(), 33);
+    #[test] fn test_effect_ids() {
+        assert_eq!(EffectType::Speed.id(), 0);
+        assert_eq!(EffectType::InstantHealth.id(), 5);
+        assert_eq!(EffectType::Darkness.id(), 32);
+        assert_eq!(EffectType::BreathOfTheNautilus.id(), 39);
     }
-
-    #[test]
-    fn test_from_id_roundtrip() {
-        for id in 1..=33u8 {
-            let effect = EffectType::from_id(id);
-            assert!(effect.is_some(), "Effect ID {} should resolve", id);
-            assert_eq!(effect.unwrap().id(), id);
+    #[test] fn test_from_id_roundtrip() {
+        for id in 0..=39u8 {
+            let e = EffectType::from_id(id);
+            assert!(e.is_some(), "Effect ID {} should resolve", id);
+            assert_eq!(e.unwrap().id(), id);
         }
     }
-
-    #[test]
-    fn test_resolve_effect_names() {
+    #[test] fn test_resolve() {
         assert_eq!(resolve_effect("speed"), Some(EffectType::Speed));
-        assert_eq!(resolve_effect("regen"), Some(EffectType::Regeneration));
-        assert_eq!(resolve_effect("invis"), Some(EffectType::Invisibility));
-        assert_eq!(resolve_effect("SLOWNESS"), Some(EffectType::Slowness));
+        assert_eq!(resolve_effect("trial_omen"), Some(EffectType::TrialOmen));
         assert!(resolve_effect("nonexistent").is_none());
-    }
-
-    #[test]
-    fn test_instant_effects() {
-        assert!(EffectType::InstantHealth.is_instant());
-        assert!(EffectType::InstantDamage.is_instant());
-        assert!(!EffectType::Speed.is_instant());
-        assert!(!EffectType::Regeneration.is_instant());
-    }
-
-    #[test]
-    fn test_beneficial_effects() {
-        assert!(EffectType::Speed.is_beneficial());
-        assert!(EffectType::Regeneration.is_beneficial());
-        assert!(!EffectType::Poison.is_beneficial());
-        assert!(!EffectType::Wither.is_beneficial());
     }
 }

@@ -305,7 +305,7 @@ fn pick_hostile_mob(biome: mc_core::biome::BiomeId) -> i32 {
         12 => if biome.is_nether() { PIGLIN } else { SPIDER },
         13 => if biome.is_nether() { HOGLIN } else { CREEPER },
         14 => if biome.is_nether() { MAGMA_CUBE } else { SLIME },
-        15 => if biome.is_nether() { ZOMBIE_PIGMAN } else { ENDERMAN },
+        15 => if biome.is_nether() { ZOMBIFIED_PIGLIN } else { ENDERMAN },
         16 => BREEZE, 17 => BOGGED,
         // Cave-specific: underground biomes → cave spider / silverfish
         18 => if matches!(biome,

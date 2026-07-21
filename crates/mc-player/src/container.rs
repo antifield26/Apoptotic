@@ -261,12 +261,12 @@ pub fn container_slot_count(block_id: u32) -> Option<usize> {
         290 => Some(27),       // barrel
         61 | 62 => Some(3),    // furnace, blast_furnace (简化: 3 slots)
         291 => Some(3),        // smoker (fuel+input+output)
-        113 => Some(10),       // crafting_table (3x3 grid + result)
-        117 => Some(5),        // brewing_stand: 3 potions + 1 ingredient + 1 fuel
+139 => Some(10),       // crafting_table (3x3 grid + result)
+131 => Some(5),        // brewing_stand: 3 potions + 1 ingredient + 1 fuel
         145 | 170 | 171 => Some(3),  // anvil: left + right + output
         151 => Some(2),        // enchanting_table (item + lapis)
         167 => Some(1),        // beacon: 1 payment slot
-        23 => Some(9),         // dispenser: 3x3 grid
+27 => Some(9),         // dispenser: 3x3 grid
         158 => Some(9),        // dropper: 3x3 grid
         154 => Some(5),        // hopper: 5 slots
         364 => Some(9),        // crafter: 3x3 grid
@@ -283,23 +283,23 @@ pub fn container_slot_count(block_id: u32) -> Option<usize> {
 /// 容器方块 ID → 窗口类型 ID (发送给客户端)
 pub fn container_window_type(block_id: u32) -> i32 {
     match block_id {
-        54 | 146 => 2,  // chest → 9x3
-        290 => 2,        // barrel → 9x3
-        61 | 62 | 291 => 3,    // furnace/blast_furnace/smoker → 3 slots
-        113 => 6,         // crafting_table → 3x3
-        117 => 10,        // brewing_stand
-        145 | 170 | 171 => 13, // anvil
-        151 => 7,         // enchanting_table
-        167 => 8,         // beacon
-        23 | 158 => 2,    // dispenser/dropper → 9x3
-        154 => 2,         // hopper → 5 slots (generic container)
-        364 => 6,         // crafter → 3x3 grid
-        455 => 22,        // smithing_table
-        169 => 23,        // grindstone
-        456 => 24,        // stonecutter
-        457 => 18,        // loom
-        458 => 19,        // cartography_table
-        459 => 20,        // lectern
+        201 | 1117 => 2,  // chest / trapped_chest (official 26.2 IDs) → 9x3
+        839 => 2,        // barrel → 9x3
+        209 | 852 | 853 => 3,    // furnace/blast_furnace/smoker → 3 slots
+206 => 6,         // crafting_table → 3x3
+879 => 10,        // brewing_stand
+        478 | 856 | 857 => 13, // anvil
+        880 => 7,         // enchanting_table
+        198 => 8,         // beacon
+        70 | 179 => 2,    // dispenser/dropper → 9x3
+        832 => 2,         // hopper → 5 slots (generic container)
+        854 => 6,         // crafter → 3x3 grid
+        1366 => 22,        // smithing_table
+        1367 => 23,        // grindstone
+        1368 => 24,        // stonecutter
+        1369 => 18,        // loom
+        1370 => 19,        // cartography_table
+        1371 => 20,        // lectern
         _ => 2,           // default: 9x3
     }
 }
