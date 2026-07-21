@@ -64,6 +64,9 @@ fastnbt = "2"
 # parallel computation
 rayon = "1"
 
+# system bindings (Linux-specific, gated behind cfg)
+libc = "0.2"
+
 # lock-free atomic references
 arc-swap = "1"
 
