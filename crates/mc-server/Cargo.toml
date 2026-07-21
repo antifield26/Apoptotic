@@ -34,3 +34,4 @@ dashmap = { workspace = true }
 uuid = { workspace = true }
 fastrand = { workspace = true }
 rayon = { workspace = true }
+libc = { workspace = true }
