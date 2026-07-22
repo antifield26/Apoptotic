@@ -580,23 +580,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::select! {
             _ = tick_interval.tick() => {
                 let tick_start = std::time::Instant::now();
-                let sprint_rate;
                 // ── C5: Tick control (Sprint / Freeze) ──
+                let (frozen, sprint_rate): (bool, u32);
                 {
                     let ws = world_state.read();
-                    if ws.tick_frozen {
-                        if !was_frozen {
-                            tracing::info!("⏸️ Ticker frozen (world paused)");
-                            was_frozen = true;
-                        }
-                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                        continue;
-                    }
-                    if was_frozen {
-                        tracing::info!("▶️ Ticker resumed");
-                        was_frozen = false;
-                    }
+                    frozen = ws.tick_frozen;
                     sprint_rate = ws.tick_sprint_rate;
+                }
+                if frozen {
+                    if !was_frozen {
+                        tracing::info!("⏸️ Ticker frozen (world paused)");
+                        was_frozen = true;
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    continue;
+                }
+                if was_frozen {
+                    tracing::info!("▶️ Ticker resumed");
+                    was_frozen = false;
                 }
                 // Adjust interval for sprint mode
                 let target_ms = if sprint_rate > 0 { (1000 / sprint_rate as u64).max(1) } else { tick_interval_ms };
@@ -1355,8 +1356,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // 26.2: Sulfur Cube Explosive archetype — redstone/fire priming + detonation
                     if mob.mob_type == mc_core::constants::entity_type::SULFUR_CUBE {
                         // Check for fire/redstone priming
-                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks: _, primed }) = mob.sulfur_cube_archetype {
-                            if !primed {
+                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks: _, primed }) = mob.sulfur_cube_archetype
+                            && !primed {
                                 let mx = mob.position.x as i32; let my = mob.position.y as i32; let mz = mob.position.z as i32;
                                 let mut should_prime = false;
                                 // Check for fire blocks nearby
@@ -1372,10 +1373,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     info!("Sulfur Cube TNT primed by fire at ({}, {}, {})", mx, my, mz);
                                 }
                             }
-                        }
                         // Detonation check
-                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks, primed }) = mob.sulfur_cube_archetype {
-                            if primed && fuse_ticks == 0 {
+                        if let Some(mc_player::mob::SulfurCubeArchetype::Explosive { fuse_ticks, primed }) = mob.sulfur_cube_archetype
+                            && primed && fuse_ticks == 0 {
                                 let mx = mob.position.x; let my = mob.position.y; let mz = mob.position.z;
                                 // Explosion damage to nearby players
                                 for player in player_manager.all_players() {
@@ -1411,7 +1411,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 mob_manager.remove(mob.entity_id);
                                 info!("Sulfur Cube TNT exploded at ({:.1}, {:.1}, {:.1})", mx, my, mz);
                             }
-                        }
                         // Hot archetype: contact damage to nearby entities
                         if let Some(mc_player::mob::SulfurCubeArchetype::Hot) = mob.sulfur_cube_archetype {
                             let mx = mob.position.x; let my = mob.position.y; let mz = mob.position.z;
@@ -1805,7 +1804,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Runs every 200 ticks (10s) to balance I/O overhead.
                 if tick_count.is_multiple_of(200) {
                     let cs = chunk_store.clone();
-                    let _ = spawn_blocking_io(move || {
+                    let _handle = spawn_blocking_io(move || {
                         cs.proactive_writeback();
                     });
                 }
@@ -1818,7 +1817,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let cs = chunk_store.clone();
                         let tc = tick_count;
                         // Offload disk I/O to I/O-pinned blocking thread (A1: CPU affinity)
-                        let _ = spawn_blocking_io(move || {
+                        let _handle = spawn_blocking_io(move || {
                             let count = mc_world::chunk_store::save_dirty_chunks_linear(&dirty, &wd);
                             if count > 0 {
                                 tracing::debug!("LZ4 async-saved {} chunks (tick {})", count, tc);
@@ -1870,7 +1869,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tps_window[tps_window_idx] = tick_elapsed_us;
                 tps_window_idx = (tps_window_idx + 1) % 20;
                 // Log TPS every 600 ticks (~30s) + memory budget (D5)
-                if tick_count % 600 == 0 {
+                if tick_count.is_multiple_of(600) {
                     let avg_us: u64 = tps_window.iter().sum::<u64>() / 20;
                     let tps = if avg_us > 0 { 1_000_000.0 / avg_us as f64 } else { 20.0 };
                     // D5: memory budget status

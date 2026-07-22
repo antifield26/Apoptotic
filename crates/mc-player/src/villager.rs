@@ -267,6 +267,10 @@ pub struct VillagerGossip {
     pub entries: Vec<GossipEntry>,
 }
 
+impl Default for VillagerGossip {
+    fn default() -> Self { Self::new() }
+}
+
 impl VillagerGossip {
     pub fn new() -> Self { Self { entries: Vec::new() } }
 
@@ -334,11 +338,15 @@ pub struct GossipManager {
     pub villager_gossips: dashmap::DashMap<i32, VillagerGossip>,
 }
 
+impl Default for GossipManager {
+    fn default() -> Self { Self::new() }
+}
+
 impl GossipManager {
     pub fn new() -> Self { Self { villager_gossips: dashmap::DashMap::new() } }
 
     pub fn get_or_create(&self, entity_id: i32) -> dashmap::mapref::one::RefMut<'_, i32, VillagerGossip> {
-        self.villager_gossips.entry(entity_id).or_insert_with(VillagerGossip::new)
+        self.villager_gossips.entry(entity_id).or_default()
     }
 
     pub fn tick(&self) {

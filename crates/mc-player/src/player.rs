@@ -1395,7 +1395,7 @@ impl PlayerManager {
     /// Returns 0 if no boots or enchant not present.
     pub fn get_boots_enchant(&self, uuid: &Uuid, enchant_name: &str) -> u8 {
         self.players.get(uuid).and_then(|p| {
-            p.inventory.armor.get(0).and_then(|opt| opt.as_ref())
+            p.inventory.armor.first().and_then(|opt| opt.as_ref())
                 .and_then(|stack| stack.nbt.as_ref())
                 .map(|nbt| crate::enchant::enchant_level(&Some(nbt.clone()), enchant_name))
         }).unwrap_or(0)
@@ -1405,7 +1405,7 @@ impl PlayerManager {
     /// Returns (frost_walker_level, soul_speed_level, swift_sneak_level).
     pub fn get_boot_enchant_levels(&self, uuid: &Uuid) -> (u8, u8, u8) {
         self.players.get(uuid).and_then(|p| {
-            p.inventory.armor.get(0).and_then(|opt| opt.as_ref())
+            p.inventory.armor.first().and_then(|opt| opt.as_ref())
                 .and_then(|stack| stack.nbt.as_ref())
                 .map(|nbt| {
                     let nbt_opt = Some(nbt.clone());
@@ -1536,19 +1536,19 @@ impl PlayerManager {
 
     /// Apply durability damage to boots (for Soul Speed, Frost Walker)
     pub fn damage_boots(&self, uuid: &Uuid, amount: u16) -> bool {
-        if let Some(mut p) = self.players.get_mut(uuid) {
-            if let Some(ref mut stack) = p.inventory.armor.get_mut(0).and_then(|opt| opt.as_mut()) {
-                if stack.durability.is_some() {
-                    let current = stack.durability.unwrap_or(0);
-                    if current <= amount {
-                        // Boots break
-                        p.inventory.armor[0] = None;
-                        return true; // broken
-                    }
-                    stack.durability = Some(current - amount);
+        if let Some(mut p) = self.players.get_mut(uuid)
+            && let Some(ref mut stack) = p.inventory.armor.get_mut(0).and_then(|opt| opt.as_mut())
+        {
+            if stack.durability.is_some() {
+                let current = stack.durability.unwrap_or(0);
+                if current <= amount {
+                    // Boots break
+                    p.inventory.armor[0] = None;
+                    return true; // broken
                 }
-                return false;
+                stack.durability = Some(current - amount);
             }
+            return false;
         }
         false
     }

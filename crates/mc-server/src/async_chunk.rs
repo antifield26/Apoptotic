@@ -10,7 +10,6 @@ use mc_core::position::ChunkPos;
 use mc_world::chunk::Chunk;
 use mc_world::chunk_store::ChunkStore;
 use std::sync::{Arc, Mutex};
-use tracing;
 
 /// Async chunk loading bridge — decouples chunk generation from the tick thread.
 pub struct AsyncChunkBridge {
@@ -57,7 +56,7 @@ impl AsyncChunkBridge {
             pending.push((*pos, *priority));
         }
         // Sort by priority (higher first)
-        pending.sort_by(|a, b| b.1.cmp(&a.1));
+        pending.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         // Process up to 32 chunks per batch
         let batch_size = pending.len().min(32);
@@ -70,7 +69,7 @@ impl AsyncChunkBridge {
         let cs = chunk_store.clone();
         if let Some(ref handle) = *self.runtime.lock().unwrap() {
             // Offload chunk generation via spawn_blocking → Rayon par_iter
-            let _ = handle.spawn_blocking(move || {
+            let _handle = handle.spawn_blocking(move || {
                 use rayon::prelude::*;
                 let positions: Vec<ChunkPos> = to_process.iter().map(|(p, _)| *p).collect();
                 let generated: Vec<(ChunkPos, Chunk)> = positions

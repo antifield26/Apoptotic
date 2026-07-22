@@ -259,7 +259,7 @@ pub fn tick_hostile_spawning(
         };
         if !can_spawn { return; }
         // C3: Per-player mob cap — each player gets a fair share of the cap
-        let online = pm.online_count().max(1) as usize;
+        let online = pm.online_count().max(1);
         let global_max = 50 + online * 10;
         if mob_mgr.count_hostile() >= global_max { return; }
         let per_player_cap = (global_max / online) as i32; // fair share per player
@@ -743,7 +743,7 @@ pub fn tick_wandering_trader(
     cs: &ChunkStore,
 ) -> Vec<(i32, i32, f64, f64, f64)> {
     // First spawn at 24000, then every 48000 ticks (2 MC days)
-    if tick_count < 24000 || (tick_count - 24000) % 48000 != 0 {
+    if tick_count < 24000 || !(tick_count - 24000).is_multiple_of(48000) {
         return Vec::new();
     }
     // Check current trader count (max 1 at a time)

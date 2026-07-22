@@ -199,18 +199,18 @@ pub fn sulfur_cube_archetype_from_block(block_id: u32) -> Option<SulfurCubeArche
         // Soul Sand (961) / Soul Soil (962) → HighResistance
         961 | 962 => Some(SulfurCubeArchetype::HighResistance),
         // Ice blocks → FastSliding
-        47 | 48 | 49 => Some(SulfurCubeArchetype::FastSliding), // ice, packed_ice, blue_ice
+        47..=49 => Some(SulfurCubeArchetype::FastSliding), // ice, packed_ice, blue_ice
         // Wool (80-95) → Light
         80..=95 => Some(SulfurCubeArchetype::Light),
         // Mushroom blocks → SlowSliding
         101 | 102 | 103 | 135 | 136 | 164 => Some(SulfurCubeArchetype::SlowSliding),
         // Wooden blocks → Bouncy
-        13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 => Some(SulfurCubeArchetype::Bouncy),
+        13..=22 => Some(SulfurCubeArchetype::Bouncy),
         // Stone-like blocks → SlowBouncy
         1 | 2 | 3 | 4 | 5 | 6 | 7 | 12 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 |
         269..=318 => Some(SulfurCubeArchetype::SlowBouncy),
         // Metal blocks → SlowFlat
-        40 | 41 | 42 | 43 | 44 | 45 | 46 => Some(SulfurCubeArchetype::SlowFlat),
+        40..=46 => Some(SulfurCubeArchetype::SlowFlat),
         // Organic blocks → FastFlat
         8 | 9 | 10 | 11 | 24 | 26 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 |
         60 | 61 | 62 | 63 | 64 | 65 | 66 | 67 | 68 | 69 | 70 | 71 | 72 |
@@ -560,10 +560,10 @@ impl MobManager {
             if mob.is_small_cube {
                 return false; // only large cubes can be bucketed
             }
-            if let Some(arch) = mob.sulfur_cube_archetype {
-                if !arch.can_bucket() {
-                    return false; // primed TNT cube cannot be bucketed
-                }
+            if let Some(arch) = mob.sulfur_cube_archetype
+                && !arch.can_bucket()
+            {
+                return false; // primed TNT cube cannot be bucketed
             }
             // Also can bucket cubes without absorbed block
         } else {
@@ -592,7 +592,7 @@ impl MobManager {
     /// Sets primed=true and fuse_ticks to the given value.
     pub fn prime_explosive(&self, entity_id: i32, fuse_ticks: u16) -> bool {
         self.mobs.get_mut(&entity_id).map(|mut mob| {
-            if let Some(SulfurCubeArchetype::Explosive { primed: _, .. }) = mob.sulfur_cube_archetype {
+            if let Some(SulfurCubeArchetype::Explosive { .. }) = mob.sulfur_cube_archetype {
                 mob.sulfur_cube_archetype = Some(SulfurCubeArchetype::Explosive { fuse_ticks, primed: true });
                 true
             } else {
@@ -1118,7 +1118,7 @@ impl MobManager {
                                         mob.position.z += (dz / dist) * speed;
                                     }
                                     if dist < 3.0 && mob.attack_cooldown == 0 {
-                                        let _ = pm.apply_damage(&player.uuid, 4.0, mob.age_ticks as u64);
+                                        let _ = pm.apply_damage(&player.uuid, 4.0, mob.age_ticks);
                                         mob.attack_cooldown = 20;
                                     }
                                     break;
@@ -1158,7 +1158,7 @@ impl MobManager {
                                         mob.position.x += (dx / dist) * speed;
                                         mob.position.z += (dz / dist) * speed;
                                         if dist < 3.0 && mob.attack_cooldown == 0 {
-                                            let _ = pm.apply_damage(&player.uuid, 8.0, mob.age_ticks as u64);
+                                            let _ = pm.apply_damage(&player.uuid, 8.0, mob.age_ticks);
                                             mob.attack_cooldown = 25;
                                         }
                                         break;
@@ -1184,7 +1184,7 @@ impl MobManager {
                                         effect: mc_core::effect::EffectType::Poison,
                                         amplifier: 0, duration_ticks: 100,
                                     });
-                                    let _ = pm.apply_damage(&player.uuid, 1.0, mob.age_ticks as u64);
+                                    let _ = pm.apply_damage(&player.uuid, 1.0, mob.age_ticks);
                                     break;
                                 }
                             }
@@ -2367,10 +2367,10 @@ impl MobManager {
             for dcz in -1..=1 {
                 if let Some(mobs) = self.chunk_mobs.get(&(cx + dcx, cz + dcz)) {
                     for eid in mobs.iter() {
-                        if let Some(mob) = self.mobs.get(eid) {
-                            if mc_core::constants::entity_type::is_hostile(mob.mob_type) {
-                                count += 1;
-                            }
+                        if let Some(mob) = self.mobs.get(eid)
+                            && mc_core::constants::entity_type::is_hostile(mob.mob_type)
+                        {
+                            count += 1;
                         }
                     }
                 }

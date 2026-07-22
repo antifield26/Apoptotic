@@ -2056,20 +2056,18 @@ async fn play_loop(
                             let _ = server.player_manager.update_position_full(&_uuid, x, y, z, old_yaw, old_pitch);
                         } else if h_dist > max_delta && h_dist > 3.0 {
                             let (violations, rubberband) = server.player_manager.ac_add_violation(&_uuid, tick_count);
-                            if rubberband {
-                                if let Some((lx, ly, lz)) = server.player_manager.ac_valid_position(&_uuid) {
+                            if rubberband
+                                && let Some((lx, ly, lz)) = server.player_manager.ac_valid_position(&_uuid) {
                                     debug!("Anti-cheat: rubberbanding {} ({} violations, moved {:.1} blocks)", username, violations, h_dist);
                                     server.player_manager.ac_reset_violations(&_uuid);
                                     server.player_manager.update_position_full(&_uuid, lx, ly, lz, old_yaw, old_pitch).ok();
                                     accepted = false;
                                 }
-                            }
                         }
-                        if accepted {
-                            if let Some(eid) = server.player_manager.get_entity_id(&_uuid) {
+                        if accepted
+                            && let Some(eid) = server.player_manager.get_entity_id(&_uuid) {
                                 server.player_manager.broadcast_entity_move(eid, _uuid, x, y, z, old_yaw, old_pitch);
                             }
-                        }
                         // Elytra glide: auto-start when falling with elytra equipped
                         if !server.player_manager.is_flying(&_uuid) {
                             let has_elytra = server.player_manager.get(&_uuid)
@@ -2205,7 +2203,7 @@ async fn play_loop(
                         let step_z = z.floor() as i32;
                         let old_step = server.player_manager.get(&_uuid)
                             .map(|p| (p.position.x.floor() as i32, p.position.y.floor() as i32, p.position.z.floor() as i32));
-                        if old_step.map_or(true, |(ox, oy, oz)| ox != step_x || oy != step_y || oz != step_z) {
+                        if old_step.is_none_or(|(ox, oy, oz)| ox != step_x || oy != step_y || oz != step_z) {
                             mc_world::redstone::register_vibration(step_x, step_y, step_z, 1);
                         }
                         // Track old/new chunk for spatial index
@@ -2265,7 +2263,7 @@ async fn play_loop(
                                     bid == 961 || bid == 962 // soul_sand, soul_soil
                                 }).unwrap_or(false);
                             if on_soul {
-                                let _ = server.player_manager.set_speed_multiplier(&_uuid,
+                                server.player_manager.set_speed_multiplier(&_uuid,
                                     1.0 + 0.155 * ss_level as f32);
                                 // Durability damage to boots (probability-based)
                                 if fastrand::u32(..).is_multiple_of(4) {
@@ -2278,7 +2276,7 @@ async fn play_loop(
                             let is_sneaking = server.player_manager.get(&_uuid)
                                 .map(|p| p.is_sneaking).unwrap_or(false);
                             if is_sneaking {
-                                let _ = server.player_manager.set_speed_multiplier(&_uuid,
+                                server.player_manager.set_speed_multiplier(&_uuid,
                                     0.3 + 0.15 * sws_level as f32);
                             }
                         }
@@ -2505,7 +2503,7 @@ async fn play_loop(
                                 let inverted = mc_world::redstone::toggle_daylight_detector(x, y, z);
                                 // Send block update to client for visual feedback
                                 let update = BlockUpdate {
-                                    x, y, z: z, block_id: target_block.id as i32,
+                                    x, y, z, block_id: target_block.id as i32,
                                 };
                                 let _ = send_packet(io, &update).await;
                                 info!("{} toggled daylight detector at ({}, {}, {}) — {}",
@@ -3632,8 +3630,8 @@ async fn play_loop(
                                     }
                                     // Feed block: absorb into Sulfur Cube, set archetype
                                     else if held_id != 0 && !mob.is_small_cube
-                                        && mob.sulfur_cube_archetype.is_none() {
-                                        if let Some(archetype) = server.mob_manager.sulfur_cube_absorb(target_entity_id, held_id) {
+                                        && mob.sulfur_cube_archetype.is_none()
+                                        && let Some(archetype) = server.mob_manager.sulfur_cube_absorb(target_entity_id, held_id) {
                                             // Remove one item from player's hand
                                             let _ = server.player_manager.remove_item_from_slot(
                                                 &_uuid,
@@ -3675,7 +3673,6 @@ async fn play_loop(
                                             info!("Player '{}' fed block {} to Sulfur Cube → archetype {:?}",
                                                 username, held_id, archetype);
                                         }
-                                    }
                                 }
                             }
                     }

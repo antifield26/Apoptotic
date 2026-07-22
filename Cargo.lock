@@ -1800,6 +1800,7 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "fastrand",
+ "libc",
  "mc-admin",
  "mc-command",
  "mc-core",
@@ -1831,6 +1832,7 @@ dependencies = [
  "fastnbt",
  "fastrand",
  "flate2",
+ "libc",
  "lz4_flex",
  "mc-core",
  "mc-protocol",

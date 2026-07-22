@@ -396,15 +396,14 @@ impl Command for DatapackCommand {
             "list" => {
                 let datapacks_dir = std::path::Path::new("datapacks");
                 let mut packs = Vec::new();
-                if datapacks_dir.exists() {
-                    if let Ok(entries) = std::fs::read_dir(datapacks_dir) {
+                if datapacks_dir.exists()
+                    && let Ok(entries) = std::fs::read_dir(datapacks_dir) {
                         for entry in entries.flatten() {
                             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                                 packs.push(entry.file_name().to_string_lossy().to_string());
                             }
                         }
                     }
-                }
                 if packs.is_empty() {
                     Ok("No datapacks installed".into())
                 } else {
