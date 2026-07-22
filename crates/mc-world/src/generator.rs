@@ -1325,7 +1325,7 @@ fn place_sulfur_springs(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: 
 
     // Use deterministic check based on position to decide if spring generates here
     let hash = (cx as u64).wrapping_mul(0x9E3779B9).wrapping_add((cz as u64).wrapping_mul(0x517CC1B7)).wrapping_add(seed);
-    if hash % 27 != 0 { return; } // ~3.7% chance per chunk
+    if !hash.is_multiple_of(27) { return; } // ~3.7% chance per chunk
 
     // Determine center position and size variant
     let variant = (hash >> 4) % 4; // 0=Small, 1=Medium, 2=Large, 3=Extra Large
@@ -1387,7 +1387,7 @@ fn place_pillager_outpost(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn
     let biome = sample_biome(cx + 8, cz + 8, seed);
     if !matches!(biome, mc_core::biome::BiomeId::Plains | mc_core::biome::BiomeId::Desert | mc_core::biome::BiomeId::Taiga | mc_core::biome::BiomeId::SnowyTaiga) { return; }
     let hash = (cx as u64).wrapping_mul(0xCBF29CE4).wrapping_add((cz as u64).wrapping_mul(0x84222325)).wrapping_add(seed);
-    if hash % 311 != 0 { return; } // ~0.32% chance
+    if !hash.is_multiple_of(311) { return; } // ~0.32% chance
 
     let center_x = ((hash >> 8) % 13 + 1) as usize;
     let center_z = ((hash >> 16) % 13 + 1) as usize;
@@ -1428,7 +1428,7 @@ fn place_woodland_mansion(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn
     let biome = sample_biome(cx + 8, cz + 8, seed);
     if biome != mc_core::biome::BiomeId::DarkForest { return; }
     let hash = (cx as u64).wrapping_mul(0xAF63D42C).wrapping_add((cz as u64).wrapping_mul(0x14057B7E)).wrapping_add(seed);
-    if hash % 1201 != 0 { return; } // rare — ~0.083%
+    if !hash.is_multiple_of(1201) { return; } // rare — ~0.083%
 
     let center_x = ((hash >> 10) % 8 + 4) as usize;
     let center_z = ((hash >> 20) % 8 + 4) as usize;
@@ -1471,7 +1471,7 @@ fn place_bastion_remnant(chunk: &mut Chunk, _pos: ChunkPos, seed: u64) {
     let biome = sample_biome(cx + 8, cz + 8, seed);
     if !matches!(biome, mc_core::biome::BiomeId::NetherWastes | mc_core::biome::BiomeId::CrimsonForest | mc_core::biome::BiomeId::SoulSandValley | mc_core::biome::BiomeId::WarpedForest | mc_core::biome::BiomeId::BasaltDeltas) { return; }
     let hash = (cx as u64).wrapping_mul(0x517CC1B7).wrapping_add((cz as u64).wrapping_mul(0x8ABE6A01)).wrapping_add(seed);
-    if hash % 211 != 0 { return; } // ~0.47%
+    if !hash.is_multiple_of(211) { return; } // ~0.47%
 
     let center_x: usize = ((hash >> 8) % 10 + 3) as usize;
     let center_z: usize = ((hash >> 16) % 10 + 3) as usize;
@@ -1515,7 +1515,7 @@ fn place_fossil(chunk: &mut Chunk, pos: ChunkPos, seed: u64, _height_fn: &dyn Fn
     let biome = sample_biome(cx + 8, cz + 8, seed);
     if !matches!(biome, mc_core::biome::BiomeId::Desert | mc_core::biome::BiomeId::Swamp) { return; }
     let hash = (cx as u64).wrapping_mul(0x9e3779b9).wrapping_add((cz as u64).wrapping_mul(0xdeadbeef)).wrapping_add(seed);
-    if hash % 317 != 0 { return; } // ~0.32%
+    if !hash.is_multiple_of(317) { return; } // ~0.32%
 
     let bone = BlockState::new(678); // bone block
     let center_x: usize = ((hash >> 8) % 12 + 2) as usize;
@@ -1550,7 +1550,7 @@ fn place_trail_ruins(chunk: &mut Chunk, pos: ChunkPos, seed: u64, height_fn: &dy
     if !matches!(biome, mc_core::biome::BiomeId::Taiga | mc_core::biome::BiomeId::OldGrowthPineTaiga | mc_core::biome::BiomeId::OldGrowthSpruceTaiga |
                   mc_core::biome::BiomeId::Jungle | mc_core::biome::BiomeId::SnowyTaiga) { return; }
     let hash = (cx as u64).wrapping_mul(0x6B8E3F1A).wrapping_add((cz as u64).wrapping_mul(0xD2A70C9B)).wrapping_add(seed);
-    if hash % 277 != 0 { return; } // ~0.36%
+    if !hash.is_multiple_of(277) { return; } // ~0.36%
 
     let center_x: usize = ((hash >> 8) % 12 + 2) as usize;
     let center_z: usize = ((hash >> 16) % 10 + 3) as usize;

@@ -45,7 +45,7 @@ pub fn tick_sulfur_spikes(chunk_store: &ChunkStore) -> Vec<(i32, i32, i32)> {
                     // Detach ceiling spikes randomly (simulates instability)
                     if is_ceiling && fastrand::f64() < 0.02 {
                         // Remove the spike block
-                        if let Some(mut ch) = chunk_store.get_mut(&cp) {
+                        if let Some(mut ch) = chunk_store.get_mut(cp) {
                             ch.set_block(lx, y, lz, mc_core::block::BlockState::AIR);
                         }
                         fallen.push((wx, y, wz));

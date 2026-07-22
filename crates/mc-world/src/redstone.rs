@@ -285,7 +285,7 @@ pub fn is_toggle_component(id: u32) -> bool { matches!(id, 852) }
 pub fn is_pulse_component(id: u32) -> bool { matches!(id, 853) }
 pub fn is_input_component(id: u32) -> bool { matches!(id, 994 | 152 | 852 | 853) }
 /// B7: Copper Bulb — toggles state on redstone pulse (T-flip-flop)
-pub fn is_copper_bulb(id: u32) -> bool { matches!(id, 1260 | 1261 | 1262 | 1263 | 1264 | 1265 | 1266 | 1267) }
+pub fn is_copper_bulb(id: u32) -> bool { matches!(id, 1260..=1267) }
 
 /// 音符盒下方方块 → 乐器音色
 pub fn note_block_instrument(below_id: u32) -> &'static str {
@@ -481,20 +481,20 @@ impl RedstoneEngine {
                         let (dx, dy, dz) = detect_piston_facing(x, y, z, self);
                         let px = x + dx; let py = y + dy; let pz = z + dz;
                         let pcp = ChunkPos::new(px >> 4, pz >> 4);
-                        if (-64..=319).contains(&py) {
-                            if let Some(mut pchunk) = chunk_store.get_mut(&pcp) {
-                                let pushed = pchunk.get_block((px & 0xF) as usize, py, (pz & 0xF) as usize);
-                                if !pushed.is_air() && pushed.id != 266 {
-                                    let (ppx, ppy, ppz) = (px + dx, py + dy, pz + dz);
-                                    if (-64..=319).contains(&ppy) {
-                                        let ppcp = ChunkPos::new(ppx >> 4, ppz >> 4);
-                                        if let Some(mut ppchunk) = chunk_store.get_mut(&ppcp) {
-                                            let dest = ppchunk.get_block((ppx & 0xF) as usize, ppy, (ppz & 0xF) as usize);
-                                            if dest.is_air() {
-                                                ppchunk.set_block((ppx & 0xF) as usize, ppy, (ppz & 0xF) as usize, pushed);
-                                                pchunk.set_block((px & 0xF) as usize, py, (pz & 0xF) as usize, BlockState::AIR);
-                                            }
-                                        }
+                        if (-64..=319).contains(&py)
+                            && let Some(mut pchunk) = chunk_store.get_mut(&pcp)
+                        {
+                            let pushed = pchunk.get_block((px & 0xF) as usize, py, (pz & 0xF) as usize);
+                            if !pushed.is_air() && pushed.id != 266 {
+                                let (ppx, ppy, ppz) = (px + dx, py + dy, pz + dz);
+                                let ppcp = ChunkPos::new(ppx >> 4, ppz >> 4);
+                                if (-64..=319).contains(&ppy)
+                                    && let Some(mut ppchunk) = chunk_store.get_mut(&ppcp)
+                                {
+                                    let dest = ppchunk.get_block((ppx & 0xF) as usize, ppy, (ppz & 0xF) as usize);
+                                    if dest.is_air() {
+                                        ppchunk.set_block((ppx & 0xF) as usize, ppy, (ppz & 0xF) as usize, pushed);
+                                        pchunk.set_block((px & 0xF) as usize, py, (pz & 0xF) as usize, BlockState::AIR);
                                     }
                                 }
                             }
@@ -525,15 +525,13 @@ fn detect_piston_facing(x: i32, y: i32, z: i32, engine: &RedstoneEngine) -> (i32
         (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, 1, 0), (0, -1, 0),
     ];
     for &(dx, dy, dz) in &dirs {
-        if let Some(p) = engine.signal_map.get(&(x + dx, y + dy, z + dz)) {
-            if *p > 0 { return (dx, dy, dz); }
-        }
+        if let Some(p) = engine.signal_map.get(&(x + dx, y + dy, z + dz))
+            && *p > 0 { return (dx, dy, dz); }
     }
     // Default: check for solid block behind (piston base)
     for &(dx, dy, dz) in &dirs {
-        if let Some(p) = engine.signal_map.get(&(x - dx, y - dy, z - dz)) {
-            if *p > 0 { return (dx, dy, dz); }
-        }
+        if let Some(p) = engine.signal_map.get(&(x - dx, y - dy, z - dz))
+            && *p > 0 { return (dx, dy, dz); }
     }
     (1, 0, 0) // default east
 }

@@ -515,8 +515,9 @@ pub fn batch_read_packed(data: &[u64], start_idx: usize, count: usize, bits: u8)
     // For 4-bit entries: process 16 entries per u64 word
     if bits == 4 {
         let words_needed = (start_idx + count) / 16 + 1;
-        for wi in (start_idx / 16)..words_needed.min(data.len()) {
-            let word = data[wi];
+        let start_wi = start_idx / 16;
+        let end_wi = words_needed.min(data.len());
+        for (wi, &word) in data.iter().enumerate().skip(start_wi).take(end_wi.saturating_sub(start_wi)) {
             // Extract 16 4-bit values from one u64
             for i in 0..16u64 {
                 let idx = wi * 16 + i as usize;
