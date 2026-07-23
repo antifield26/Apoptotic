@@ -1007,8 +1007,8 @@ impl MobManager {
                         let friction = arch.map(|a| a.friction()).unwrap_or(0.6);
                         let next_hop_delay = (30.0 / friction.max(0.1)).min(80.0) as u64;
                         // 26.2 Hot archetype: damage entities on contact
-                        if let Some(SulfurCubeArchetype::Hot) = arch {
-                            if let Some(pm) = player_manager {
+                        if let Some(SulfurCubeArchetype::Hot) = arch
+                            && let Some(pm) = player_manager {
                                 for player in pm.all_players() {
                                     let dx = player.position.x - mob.position.x;
                                     let dz = player.position.z - mob.position.z;
@@ -1018,7 +1018,6 @@ impl MobManager {
                                         let _ = pm.apply_damage(&player.uuid, 2.0, mob.age_ticks);
                                     }
                                 }
-                            }
                         }
                         // 26.2: entity bounce emits vibration (frequency 2) for Sculk Sensor
                         let _ = self.position_tx.send(MobPositionEvent {
