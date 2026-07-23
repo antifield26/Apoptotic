@@ -64,7 +64,7 @@ GET /status    → {"server":"Apoptotic","tps_p95":"20","memory_mb":128,...}
 
 ## 数据管道
 
-注册表数据 (`item_registry.in.rs`) 已提交至仓库——部署设备无需 Minecraft 客户端。
+注册表数据 (`item_registry.in.rs`) 已提交至仓库
 仅在需要更新到新 Minecraft 版本时运行以下脚本：
 
 ```bash

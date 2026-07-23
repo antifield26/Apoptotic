@@ -46,7 +46,7 @@ pub fn tick_sulfur_spikes(chunk_store: &ChunkStore) -> Vec<(i32, i32, i32)> {
                     let above_block = get_block_id_at(chunk_store, wx, y + 2, wz);
                     let is_on_sulfur = above_block == 1240; // Sulfur block
                     if is_ceiling && is_on_sulfur && fastrand::f64() < 0.01
-                        && y - 1 >= -64
+                        && y > -64
                         && get_block_id_at(chunk_store, wx, y - 1, wz) == 0 {
                             // Grow downward: add spike below
                             if let Some(mut ch) = chunk_store.get_mut(cp) {
@@ -57,7 +57,7 @@ pub fn tick_sulfur_spikes(chunk_store: &ChunkStore) -> Vec<(i32, i32, i32)> {
                     let is_floor = below != 0 && below != SULFUR_SPIKE_ID && above == 0;
                     let block_below = get_block_id_at(chunk_store, wx, y - 2, wz);
                     if is_floor && block_below == 1240 && fastrand::f64() < 0.01
-                        && y + 1 <= 319
+                        && y < 319
                         && get_block_id_at(chunk_store, wx, y + 1, wz) == 0 {
                             // Grow upward
                             if let Some(mut ch) = chunk_store.get_mut(cp) {
