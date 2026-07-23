@@ -547,15 +547,15 @@ pub struct ChunkSectionData {
     pub biomes: Vec<u8>,             // PalettedContainer 编码
 }
 
-/// Chunk Data 数据包
+/// Level Chunk With Light (protocol 776: 0x2D) — replaces old ChunkData
 pub struct ChunkData {
     pub chunk_x: i32,
     pub chunk_z: i32,
-    pub heightmaps: Vec<u8>,         // NBT 编码的高度图
+    pub heightmaps: Vec<u8>,         // NBT heightmaps (maintained for backward compat)
     pub sections: Vec<ChunkSectionData>,
-    pub block_entities: Vec<u8>,     // 方块实体 NBT 数据
-    pub sky_light_mask: Vec<i64>,    // bit set for sections with sky light
-    pub block_light_mask: Vec<i64>,  // bit set for sections with block light
+    pub block_entities: Vec<u8>,     // block entity NBT data
+    pub sky_light_mask: Vec<i64>,
+    pub block_light_mask: Vec<i64>,
     pub empty_sky_light_mask: Vec<i64>,
     pub empty_block_light_mask: Vec<i64>,
     pub sky_light_arrays: Vec<Vec<u8>>,
@@ -563,7 +563,7 @@ pub struct ChunkData {
 }
 
 impl PacketEncoder for ChunkData {
-    fn packet_id(&self) -> i32 { 0x27 }
+    fn packet_id(&self) -> i32 { 0x2D }
     fn encode_payload(&self) -> Vec<u8> {
         let mut buf = Vec::new();
 
@@ -571,39 +571,43 @@ impl PacketEncoder for ChunkData {
         buf.extend_from_slice(&write_i32(self.chunk_x));
         buf.extend_from_slice(&write_i32(self.chunk_z));
 
-        // Heightmaps (NBT)
-        buf.extend_from_slice(&self.heightmaps);
+        // ── Heightmaps: structured array [{type: varint, data: u64[]}] ──
+        // Send empty heightmaps — client can regenerate from block data
+        buf.extend_from_slice(&write_varint_bytes(0));
 
-        // Sections: varint count, then each section
-        buf.extend_from_slice(&write_varint_bytes(self.sections.len() as i32));
+        // ── Buffer: serialized section data ──
+        let mut section_buf = Vec::new();
+        section_buf.extend_from_slice(&write_varint_bytes(self.sections.len() as i32));
         for section in &self.sections {
-            buf.extend_from_slice(&section.block_count.to_be_bytes());
-            buf.extend_from_slice(&write_varint_bytes(section.blocks.len() as i32));
-            buf.extend_from_slice(&section.blocks);
-            buf.extend_from_slice(&write_varint_bytes(section.biomes.len() as i32));
-            buf.extend_from_slice(&section.biomes);
+            section_buf.extend_from_slice(&section.block_count.to_be_bytes());
+            // Block states: paletted container (varint-length + bytes)
+            section_buf.extend_from_slice(&write_varint_bytes(section.blocks.len() as i32));
+            section_buf.extend_from_slice(&section.blocks);
+            // Biomes: paletted container (varint-length + bytes)
+            section_buf.extend_from_slice(&write_varint_bytes(section.biomes.len() as i32));
+            section_buf.extend_from_slice(&section.biomes);
+        }
+        buf.extend_from_slice(&write_varint_bytes(section_buf.len() as i32));
+        buf.extend_from_slice(&section_buf);
+
+        // ── Block entities: [{packedXZ: i8, y: i16, type: varint, data: nbt}] ──
+        // Send block entities as raw NBT array (compatible format)
+        buf.extend_from_slice(&write_varint_bytes(self.block_entities.len() as i32));
+        if !self.block_entities.is_empty() {
+            buf.extend_from_slice(&self.block_entities);
         }
 
-        // Block entities: varint count, then NBT bytes
-        buf.extend_from_slice(&write_varint_bytes(self.block_entities.len() as i32));
-        buf.extend_from_slice(&self.block_entities);
-
-        // Light masks: varint-prefixed long arrays
-        write_bit_set(&mut buf, &self.sky_light_mask);
-        write_bit_set(&mut buf, &self.block_light_mask);
-        write_bit_set(&mut buf, &self.empty_sky_light_mask);
-        write_bit_set(&mut buf, &self.empty_block_light_mask);
-
-        // Light arrays: varint count, then each array (varint-prefixed byte arrays)
-        write_light_arrays(&mut buf, &self.sky_light_arrays);
-        write_light_arrays(&mut buf, &self.block_light_arrays);
+        // ── Sky light: array of byte arrays ──
+        write_light_arrays_776(&mut buf, &self.sky_light_arrays);
+        // ── Block light: array of byte arrays ──
+        write_light_arrays_776(&mut buf, &self.block_light_arrays);
 
         buf
     }
 }
 
 impl PacketDecoder for ChunkData {
-    fn packet_id() -> i32 { 0x27 }
+    fn packet_id() -> i32 { 0x2D }
     fn decode_payload(_data: &[u8]) -> Result<Self, CodecError> {
         Err(CodecError::Malformed("ChunkData decode not implemented".into()))
     }
@@ -617,6 +621,15 @@ fn write_bit_set(buf: &mut Vec<u8>, longs: &[i64]) {
 }
 
 fn write_light_arrays(buf: &mut Vec<u8>, arrays: &[Vec<u8>]) {
+    buf.extend_from_slice(&write_varint_bytes(arrays.len() as i32));
+    for arr in arrays {
+        buf.extend_from_slice(&write_varint_bytes(arr.len() as i32));
+        buf.extend_from_slice(arr);
+    }
+}
+
+// Protocol 776 light array format: varint count, then [varint length + bytes] per array
+fn write_light_arrays_776(buf: &mut Vec<u8>, arrays: &[Vec<u8>]) {
     buf.extend_from_slice(&write_varint_bytes(arrays.len() as i32));
     for arr in arrays {
         buf.extend_from_slice(&write_varint_bytes(arr.len() as i32));

@@ -530,7 +530,7 @@ pub(crate) async fn play_loop(
                     }
             }
             // Keep Alive response
-            0x1A => {
+            0x1C => {
                 last_keep_alive_response = Instant::now();
                 player_ping_ms = keep_alive_sent_instant.elapsed().as_millis() as u32;
                 debug!("Keep alive from {} (ping: {}ms)", username, player_ping_ms);
@@ -584,7 +584,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Player Position (0x20) — x, y, z doubles + flags
-            0x1C => {
+            0x1E => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
                     && payload.len() >= 24 {
                         let x = f64::from_be_bytes(payload[0..8].try_into().unwrap_or([0;8]));
@@ -738,7 +738,7 @@ pub(crate) async fn play_loop(
                     }
             }
             // Player Position And Rotation (0x22) — x, y, z, yaw, pitch + flags
-            0x1D => {
+            0x1F => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
                     && payload.len() >= 33 {
                         let x = f64::from_be_bytes(payload[0..8].try_into().unwrap_or([0;8]));
@@ -2872,8 +2872,8 @@ pub(crate) async fn play_loop(
                     Err(_) => debug!("Resource pack response decode failed"),
                 }
             }
-            // Player Command (0x1F) — sprint/sneak/flight input
-            0x1F => {
+            // Player Command (0x2A) — sprint/sneak/flight input
+            0x2A => {
                 if let Ok(cmd) = io.codec().decode::<mc_protocol::packets::play::PlayerCommand>(&frame) {
                     match cmd.action {
                         0 => { let _ = server.player_manager.set_sneaking(&_uuid, true); }
