@@ -1994,7 +1994,7 @@ async fn accept_loop(
 /// Saves chunks to world/ directory in LZ4 Linear format.
 async fn cmd_pregenerate(radius: u32, threads: usize) -> Result<(), Box<dyn std::error::Error>> {
     use mc_core::position::ChunkPos;
-    use mc_world::chunk_store::{ChunkStore, ChunkCompression};
+    use mc_world::chunk_store::ChunkCompression;
     use mc_world::generator::TerrainGenerator;
     use rayon::prelude::*;
     use std::time::Instant;
@@ -2047,7 +2047,6 @@ async fn cmd_pregenerate(radius: u32, threads: usize) -> Result<(), Box<dyn std:
     info!("Total chunks to generate: {}", total_chunks);
 
     let generator = mc_world::generator::NoiseGenerator::new();
-    let chunk_store = ChunkStore::new();
     let start = Instant::now();
 
     // Generate chunks in parallel, sorted by Chebyshev distance (spawn-first)
@@ -2085,7 +2084,7 @@ async fn cmd_pregenerate(radius: u32, threads: usize) -> Result<(), Box<dyn std:
             .collect();
         mc_world::chunk_store::save_dirty_chunks_linear(&dirty, &world_dir);
         saved += dirty.len();
-        if saved % 256 == 0 || saved == total_chunks {
+        if saved.is_multiple_of(256) || saved == total_chunks {
             info!("Progress: {}/{} chunks saved ({:.0}%)",
                 saved, total_chunks,
                 saved as f64 / total_chunks as f64 * 100.0,

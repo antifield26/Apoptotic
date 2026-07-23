@@ -5,10 +5,7 @@
 
 use crate::connection::{send_packet, send_chunk_data_cached, effective_view_distance, stream_new_chunks, fire_advancement, weapon_damage, ServerRef};
 use crate::packet_io::PacketStream;
-use crate::c2s_handlers;
 use crate::rate_limiter;
-use mc_protocol::codec::*;
-use mc_protocol::packets::play::*;
 use tracing::{debug, error, info, warn};
 
 pub(crate) async fn play_loop(

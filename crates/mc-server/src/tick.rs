@@ -23,6 +23,7 @@ type SharedAdvancementTracker = Arc<parking_lot::RwLock<mc_player::advancement::
 /// Tick 阶段定义: 名称 + 间隔 + 超时预算
 pub struct TickStage {
     pub name: &'static str,
+    #[allow(dead_code)]
     pub interval: u64,        // 每 N tick 执行一次
     pub max_budget_us: u64,   // 超时告警阈值 (微秒)
 }

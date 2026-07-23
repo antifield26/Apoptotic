@@ -1476,15 +1476,6 @@ pub(crate) fn weapon_damage(item_id: u32) -> f32 {
     }
 }
 
-/// Check if a block ID is an ore (for Fortune/Silk Touch)
-fn is_ore_block(block_id: u32) -> bool {
-    matches!(block_id,
-        27 | 29 | 31 | 47 | 59 | 109 | 117 | 150 | 300 |  // overworld ores
-        337 | 338 | 339 | 340 | 341 | 342 | 343 |          // deepslate ores
-        267                                                  // ancient_debris
-    )
-}
-
 /// Get the surface Y level at a world position from a loaded chunk
 fn find_surface_y(chunk: &mc_world::chunk::Chunk, local_x: usize, local_z: usize) -> f64 {
     // Search top-down through sections for the first non-air block

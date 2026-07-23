@@ -2,6 +2,11 @@
 //!
 //! Validates player movement packets against physics limits (speed * multiplier).
 //! Accumulates violations and triggers rubberband teleport at 8 violations.
+//!
+//! NOTE: These functions are prepared for extraction from connection.rs.
+//! Currently connection.rs uses PlayerManager::ac_* methods directly.
+//! The functions below will replace inline code when wired.
+#![allow(dead_code)]
 
 use mc_player::player::PlayerManager;
 use uuid::Uuid;
@@ -63,12 +68,11 @@ pub fn validate_movement(
     // Large violation — accumulate and check rubberband threshold
     let (violations, rubberband) = pm.ac_add_violation(uuid, tick_count);
 
-    if rubberband {
-        if let Some((lx, ly, lz)) = pm.ac_valid_position(uuid) {
+    if rubberband
+        && let Some((lx, ly, lz)) = pm.ac_valid_position(uuid) {
             pm.ac_reset_violations(uuid);
             return Err((lx, ly, lz));
         }
-    }
 
     // Violation recorded but not yet at rubberband threshold — accept this move
     tracing::debug!(

@@ -5,7 +5,7 @@
 
 use crate::connection::{send_packet, send_chunk_data_cached, ServerRef};
 use crate::packet_io::PacketStream;
-use mc_protocol::codec::{read_string, read_varint_enum};
+use mc_protocol::codec::read_varint_enum;
 use mc_protocol::packets::play::*;
 use mc_protocol::varint::varint_size;
 use tracing::{debug, info};
@@ -122,7 +122,7 @@ pub async fn handle_use_item_on(
     if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(frame) {
         // Read hand
         let (hand, _) = read_varint_enum(&payload).unwrap_or((0, 0));
-        let off = varint_size(hand as i32);
+        let off = varint_size(hand);
         if off + 8 > payload.len() { return; }
         let raw = i64::from_be_bytes(payload[off..off+8].try_into().unwrap_or([0;8]));
         let x = (raw >> 38) as i32;
@@ -170,7 +170,7 @@ pub fn handle_container_close(
     frame: &[u8],
 ) {
     if let Ok(c) = io.codec().decode::<ContainerClose>(frame) {
-        server.container_manager.close(uuid, c.window_id as u8);
+        server.container_manager.close(uuid, c.window_id);
     }
 }
 
@@ -293,7 +293,7 @@ pub async fn handle_command_suggestions(
 // ═══════════════════════════════════════════════════════════════
 
 /// Handle SelectTrade (0x23). Returns true to continue, false to skip this packet.
-pub fn handle_select_trade(io: &PacketStream, server: &ServerRef, username: &str, frame: &[u8]) -> bool {
+pub fn handle_select_trade(io: &PacketStream, _server: &ServerRef, username: &str, frame: &[u8]) -> bool {
     if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(frame) {
         let (slot, _) = read_varint_enum(&payload).unwrap_or((0, 0));
         if !(0..=9).contains(&slot) {
