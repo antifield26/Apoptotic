@@ -37,6 +37,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
+          which aarch64-linux-gnu-gcc
+          aarch64-linux-gnu-gcc --version
 
       - name: Cache cargo
         uses: actions/cache@v4
