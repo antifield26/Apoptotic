@@ -415,7 +415,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Chat Command (0x08) — slash command via alternate channel
-            0x05 => {
+            0x07 => {
                 match io.codec().decode::<mc_protocol::packets::play::ChatCommand>(&frame) {
                     Ok(cmd) => {
                         // Validate: reject commands longer than 256 chars (anti-flood)
@@ -506,7 +506,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Client Information
-            0x0C => {
+            0x0E => {
                 match io.codec().decode::<ClientInformation>(&frame) {
                     Ok(info) => {
                         server.player_manager.set_client_view_distance(&_uuid, info.view_distance, &info.locale);
@@ -518,7 +518,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Set Held Item (C2S 0x2A) — player changed hotbar slot
-            0x33 => {
+            0x35 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
                     && !payload.is_empty() {
                         let slot = (payload[0] as i16) as u8;
@@ -536,7 +536,7 @@ pub(crate) async fn play_loop(
                 debug!("Keep alive from {} (ping: {}ms)", username, player_ping_ms);
             }
             // Chat Message (C2S)
-            0x07 => {
+            0x12 => {
                 match io.codec().parse_packet_id_and_payload(&frame) {
                     Ok((_, payload)) => {
                         if let Ok((msg, _)) = mc_protocol::codec::read_string(&payload) {
@@ -584,7 +584,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Player Position (0x20) — x, y, z doubles + flags
-            0x1E => {
+            0x20 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
                     && payload.len() >= 24 {
                         let x = f64::from_be_bytes(payload[0..8].try_into().unwrap_or([0;8]));
@@ -878,7 +878,7 @@ pub(crate) async fn play_loop(
                     }
             }
             // Player Rotation (0x1E) — yaw + pitch
-            0x1E => {
+            0x20 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
                     && payload.len() >= 9 {
                         let yaw = f32::from_be_bytes(payload[0..4].try_into().unwrap_or([0;4]));
@@ -894,11 +894,11 @@ pub(crate) async fn play_loop(
                     }
             }
             // Player Action (0x27) — includes block break
-            0x27 => {
+            0x29 => {
                 crate::c2s_handlers::handle_player_action(io, server, &_uuid, &frame).await;
             }
             // Use Item On (0x3E) — block placement or container open
-            0x3E => {
+            0x42 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) {
                     let mut off = 0;
                     while off < payload.len() && payload[off] & 0x80 != 0 { off += 1; }
@@ -1184,7 +1184,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Use Item (0x3F) — fishing rod, bow, snowball, egg, ender pearl, splash potion
-            0x3F => {
+            0x43 => {
                 let held = server.player_manager.get_held_item(&_uuid);
                 let held_id = held.map(|i| i.item.id).unwrap_or(0);
                 let player = server.player_manager.get(&_uuid);
@@ -2152,12 +2152,12 @@ pub(crate) async fn play_loop(
                     }
             }
             // Set Creative Mode Slot (0x36) — creative inventory item placement
-            0x36 => {
+            0x3F => {
                 debug!("SetCreativeModeSlot from {}", username);
                 let _ = send_packet(io, &mc_protocol::packets::play::AcknowledgeBlockChange { sequence: 0 }).await;
             }
             // Container Click (0x09) — player clicked in a container GUI
-            0x09 => {
+            0x12 => {
                 match io.codec().decode::<mc_protocol::packets::play::ContainerClick>(&frame) {
                     Ok(click) => {
                         let player_window = server.container_manager.player_window(&_uuid);
@@ -2745,7 +2745,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Container Close (0x0F) — player closed a container GUI
-            0x0F => {
+            0x13 => {
                 match io.codec().decode::<mc_protocol::packets::play::ContainerClose>(&frame) {
                     Ok(close) => {
                         // Drop cursor item if player has one
@@ -2853,7 +2853,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // Cookie Response (0x16) — client sends stored cookie data
-            0x16 => { crate::c2s_handlers::handle_cookie_response(io, &frame); }
+            0x15 => { crate::c2s_handlers::handle_cookie_response(io, &frame); }
             // Resource Pack Response (0x24) — disconnect if required pack declined
             0x24 => {
                 match io.codec().decode::<mc_protocol::packets::play::ResourcePackResponse>(&frame) {
@@ -2911,7 +2911,7 @@ pub(crate) async fn play_loop(
                     }
             }
             // PickItem (0x17) — middle-click block pick (creative mode)
-            0x17 => { crate::c2s_handlers::handle_pick_item(io, server, &_uuid, &frame); }
+            0x24 => { crate::c2s_handlers::handle_pick_item(io, server, &_uuid, &frame); }
             // CommandSuggestions (0x08) — tab completion: parse and echo
             0x08 => { crate::c2s_handlers::handle_command_suggestions(io, &frame).await; }
             // ClientTickEnd (0x21) — client tick complete; validate and track tick timing
@@ -2921,7 +2921,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // SelectTrade (0x23) — villager trade selection
-            0x23 => {
+                        0x33 => {
                 if !crate::c2s_handlers::handle_select_trade(io, server, username, &frame) { continue; }
                 fire_advancement(server, io, &_uuid,
                     &mc_player::advancement::Criterion::VillagerTrade).await;
@@ -2929,15 +2929,15 @@ pub(crate) async fn play_loop(
             // LockDifficulty (0x10) — OP locks world difficulty
             0x10 => { if !crate::c2s_handlers::handle_lock_difficulty(io, server, &_uuid, username, &frame) { continue; } }
             // EditBook (0x0E) — write pages to item NBT via PlayerManager
-            0x0E => { crate::c2s_handlers::handle_edit_book(io, server, &_uuid, username, &frame); }
+            0x18 => { crate::c2s_handlers::handle_edit_book(io, server, &_uuid, username, &frame); }
             // AdvancementTab (0x11) — open/close advancement screen
             0x11 => { crate::c2s_handlers::handle_advancement_tab(io, username, &frame); }
             // RenameItem (0x12) — anvil rename: store display name in held item NBT
-            0x12 => { crate::c2s_handlers::handle_rename_item(io, server, &_uuid, username, &frame); }
+            0x30 => { crate::c2s_handlers::handle_rename_item(io, server, &_uuid, username, &frame); }
             // RecipeBookData (0x13) — track player's unlocked recipes
-            0x13 => { crate::c2s_handlers::handle_recipe_book_data(io, server, &_uuid, &frame); }
+            0x2F => { crate::c2s_handlers::handle_recipe_book_data(io, server, &_uuid, &frame); }
             // PaddleBoat (0x19) — boat steering: apply movement to ridden vehicle
-            0x19 => { crate::c2s_handlers::handle_paddle_boat(io, server, &_uuid, &frame); }
+            0x23 => { crate::c2s_handlers::handle_paddle_boat(io, server, &_uuid, &frame); }
             // VehicleMoveC2S (0x20) — vehicle position from client
             0x20 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && payload.len() >= 32 {
@@ -2950,7 +2950,7 @@ pub(crate) async fn play_loop(
                 }
             }
             // PickFromBlock (0x25) — creative pick: give player the block
-            0x25 => { crate::c2s_handlers::handle_pick_from_block(io, server, &_uuid, &frame); }
+            0x24 => { crate::c2s_handlers::handle_pick_from_block(io, server, &_uuid, &frame); }
             // SetBeacon (0x2B) — primary/secondary effect selection, handled via ContainerClick (slot 0=payment, slot 1=effect)
             0x2B => {
                 // Beacon effect selection is processed through ContainerClick mode 0 on slots 1-2
