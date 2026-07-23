@@ -1694,6 +1694,7 @@ version = "0.1.0"
 dependencies = [
  "parking_lot",
  "serde",
+ "thiserror 2.0.18",
  "uuid",
 ]
 

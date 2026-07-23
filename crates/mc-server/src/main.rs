@@ -87,11 +87,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--help" | "-h" => {
                 println!("Minecraft LAN Server — Rust Edition");
                 println!();
-                println!("Usage:  mc-server");
+                println!("Usage:");
+                println!("  mc-server                      Start the server");
+                println!("  mc-server pregenerate [OPTS]   Pre-generate chunks (RPi 5 optimization)");
                 println!();
                 println!("Config:  config/default.toml");
                 println!("Env:     MCS_SECTION__KEY=value (e.g. MCS_SERVER__PORT=25566)");
                 return Ok(());
+            }
+            "pregenerate" => {
+                let radius: u32 = args.iter()
+                    .position(|a| a == "--radius")
+                    .and_then(|i| args.get(i + 1))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(200);
+                let threads: usize = args.iter()
+                    .position(|a| a == "--threads")
+                    .and_then(|i| args.get(i + 1))
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(3));
+                return cmd_pregenerate(radius, threads).await;
             }
             other => {
                 eprintln!("Unknown option: {} (use --help for usage)", other);
@@ -1068,7 +1083,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             tame_attempts: 0, is_baby: false, in_love_ticks: 0,
                                             breed_cooldown: 0, is_sheared: false,
                                             path: vec![], path_last_tick: 0,
-                                            is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
+                                            is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, is_dormant: false, dirty_flags: 3,
                                         };
                                         mob_manager.register(cloud);
                                     }
@@ -1164,7 +1179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         tame_attempts: 0, is_baby: false, in_love_ticks: 0,
                                         breed_cooldown: 0, is_sheared: false,
                                         path: vec![], path_last_tick: 0,
-                                        is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
+                                        is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, is_dormant: false, dirty_flags: 3,
                                     };
                                     mob_manager.register(tracked);
                                     player_manager.broadcast_mob_spawn(eid, mob_uuid, *mob_type, pos.x, pos.y, pos.z);
@@ -1548,7 +1563,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     is_in_water: false,
                                     sulfur_cube_archetype: None,
                                     absorbed_block_id: None,
-                                    is_small_cube: false, dirty_flags: 3,
+                                    is_small_cube: false, is_dormant: false, dirty_flags: 3,
                                 };
                                 mob_manager.insert_mob(slime_mob);
                                 player_manager.broadcast_mob_spawn(eid, uuid::Uuid::new_v4(), 117, ox, pos.1, oz);
@@ -1638,7 +1653,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     is_baby: false,
                                     in_love_ticks: 0,
                                     breed_cooldown: 0,
-                                    is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
+                                    is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, is_dormant: false, dirty_flags: 3,
                                 };
                                 mob_manager.register(tracked);
                                 player_manager.broadcast_mob_spawn(eid, mob_uuid, mob_type, sx, spawn_y, sz);
@@ -1691,7 +1706,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     max_health: mc_player::mob::mob_max_health(mob_type),
                                     age_ticks: 0, ai_timer: 40 + fastrand::u64(..) % 61,
                                     ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                    owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
+                                    owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, is_dormant: false, dirty_flags: 3,
                                 };
                                 mob_manager.register(tracked);
                                 player_manager.broadcast_mob_spawn(eid, mob_uuid, mob_type, sx, spawn_y, sz);
@@ -1735,7 +1750,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         health: 20.0, max_health: 20.0,
                                         age_ticks: 0, ai_timer: 200,
                                         ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                        owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
+                                        owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, is_dormant: false, dirty_flags: 3,
                                     };
                                     mob_manager.register(baby);
                                     break; // one baby per cycle
@@ -1753,7 +1768,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 health: 100.0, max_health: 100.0,
                                 age_ticks: 0, ai_timer: 80,
                                 ai_state: MobAiState::Idle, attack_cooldown: 0, last_sync_tick: 0,
-                                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, dirty_flags: 3,
+                                owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0, is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false, is_on_fire: false, is_in_water: false, sulfur_cube_archetype: None, absorbed_block_id: None, path: Vec::new(), path_last_tick: 0, is_small_cube: false, is_dormant: false, dirty_flags: 3,
                             };
                             mob_manager.register(golem);
                         }
@@ -1970,5 +1985,129 @@ async fn accept_loop(
     }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CLI: pregenerate — 预生成区块 (RPi 5 探索性能优化)
+// ═══════════════════════════════════════════════════════════════
+
+/// Pre-generate chunks within the given radius around spawn.
+/// Uses Rayon parallel iteration for multi-core acceleration.
+/// Saves chunks to world/ directory in LZ4 Linear format.
+async fn cmd_pregenerate(radius: u32, threads: usize) -> Result<(), Box<dyn std::error::Error>> {
+    use mc_core::position::ChunkPos;
+    use mc_world::chunk_store::{ChunkStore, ChunkCompression};
+    use mc_world::generator::TerrainGenerator;
+    use rayon::prelude::*;
+    use std::time::Instant;
+
+    // Set Rayon thread count
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build_global()
+        .unwrap_or_else(|_| {
+            info!("Rayon pool already initialized, using existing pool");
+        });
+
+    // Load config for world settings
+    let config_path = std::env::var("MCS_CONFIG")
+        .unwrap_or_else(|_| "config/default.toml".to_string());
+    let config = crate::config::Config::load(std::path::Path::new(&config_path))
+        .unwrap_or_else(|_| {
+            info!("No config found at {}, using defaults", config_path);
+            crate::config::Config::default()
+        });
+    let seed = config.world.seed.as_ref().map(|s| {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+        let mut h = DefaultHasher::new();
+        s.hash(&mut h);
+        h.finish()
+    }).unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(42)
+    });
+
+    info!("═══ Chunk Pre-generator ═══");
+    info!("Radius: {} blocks ({} chunks per side)", radius, radius as i32 / 16 * 2 + 1);
+    info!("Threads: {}", threads);
+    info!("Seed: {}", seed);
+    info!("Compression: {}", config.persistence.chunk_compression);
+
+    // Setup chunk compression (default LZ4 for RPi 5 ARM NEON acceleration)
+    mc_world::chunk_store::set_compression(ChunkCompression::Lz4);
+
+    // World directory
+    let world_dir = std::path::PathBuf::from(
+        std::env::var("MCS_WORLD_DIR").unwrap_or_else(|_| "world".to_string()),
+    );
+    std::fs::create_dir_all(&world_dir)?;
+
+    let chunk_radius = (radius as i32 + 15) / 16;
+    let total_chunks = (chunk_radius * 2 + 1) as usize * (chunk_radius * 2 + 1) as usize;
+    info!("Total chunks to generate: {}", total_chunks);
+
+    let generator = mc_world::generator::NoiseGenerator::new();
+    let chunk_store = ChunkStore::new();
+    let start = Instant::now();
+
+    // Generate chunks in parallel, sorted by Chebyshev distance (spawn-first)
+    let mut positions: Vec<(i32, ChunkPos)> = Vec::with_capacity(total_chunks);
+    for cx in -chunk_radius..=chunk_radius {
+        for cz in -chunk_radius..=chunk_radius {
+            let dist = cx.abs().max(cz.abs());
+            positions.push((dist, ChunkPos::new(cx, cz)));
+        }
+    }
+    positions.par_sort_by_key(|(d, _)| *d);
+
+    // Rayon parallel generation
+    let results: Vec<(ChunkPos, mc_world::chunk::Chunk)> = positions
+        .par_iter()
+        .map(|(_, cp)| {
+            let chunk = generator.generate_chunk(*cp, seed);
+            (*cp, chunk)
+        })
+        .collect();
+
+    let gen_elapsed = start.elapsed();
+    info!("Generation: {:.1}s ({:.0} chunks/s)",
+        gen_elapsed.as_secs_f64(),
+        total_chunks as f64 / gen_elapsed.as_secs_f64().max(0.001),
+    );
+
+    // Save all chunks in batches
+    let save_start = Instant::now();
+    let mut saved = 0usize;
+    let batch_size = 64;
+    for batch in results.chunks(batch_size) {
+        let dirty: Vec<(ChunkPos, mc_world::chunk::Chunk)> = batch.iter()
+            .map(|(cp, chunk)| (*cp, chunk.clone()))
+            .collect();
+        mc_world::chunk_store::save_dirty_chunks_linear(&dirty, &world_dir);
+        saved += dirty.len();
+        if saved % 256 == 0 || saved == total_chunks {
+            info!("Progress: {}/{} chunks saved ({:.0}%)",
+                saved, total_chunks,
+                saved as f64 / total_chunks as f64 * 100.0,
+            );
+        }
+    }
+
+    let total_elapsed = start.elapsed();
+    info!("═══ Complete ═══");
+    info!("Chunks: {} generated, {} saved", total_chunks, saved);
+    info!("Generation: {:.1}s", gen_elapsed.as_secs_f64());
+    info!("Save: {:.1}s", save_start.elapsed().as_secs_f64());
+    info!("Total: {:.1}s ({:.0} chunks/s overall)",
+        total_elapsed.as_secs_f64(),
+        total_chunks as f64 / total_elapsed.as_secs_f64().max(0.001),
+    );
+
+    // Print memory estimate
+    let est_mb = (total_chunks * 8192) as f64 / (1024.0 * 1024.0);
+    info!("Estimated disk size: ~{:.0} MB (LZ4 compressed)", est_mb * 0.3);
+
+    Ok(())
+}
 
 

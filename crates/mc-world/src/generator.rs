@@ -375,25 +375,10 @@ pub fn fill_section_biomes(biomes: &mut crate::paletted::PalettedContainer, sect
 }
 
 // ── Cave carving ──
-
-#[allow(dead_code)]
-fn carve_caves(chunk: &mut Chunk, seed: u64) {
-    for x in 0..16usize {
-        for z in 0..16usize {
-            for y in -60..50i32 {
-                let wx = chunk.position.x * 16 + x as i32;
-                let wz = chunk.position.z * 16 + z as i32;
-                let h = (wx as u64).wrapping_mul(374761393)
-                    ^ (y as u64).wrapping_mul(668265263)
-                    ^ (wz as u64).wrapping_mul(1274126177)
-                    ^ seed.wrapping_mul(4242);
-                if (h as i32).wrapping_abs() as u32 % 10000 < 800 {
-                    chunk.set_block(x, y, z, blocks::AIR);
-                }
-            }
-        }
-    }
-}
+// Cave generation is handled inline in NoiseGenerator::generate_chunk()
+// via is_cave() (Perlin 3D noise). The old hash-based carve_caves() was
+// replaced by the superior Perlin approach and has been removed.
+// See NoiseGenerator::is_cave() and NoiseGenerator::generate_chunk() lines 1663-1674.
 
 // ── Ore placement ──
 

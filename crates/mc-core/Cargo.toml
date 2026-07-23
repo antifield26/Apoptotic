@@ -8,3 +8,4 @@ license.workspace = true
 uuid = { workspace = true }
 serde = { workspace = true }
 parking_lot = { workspace = true }
+thiserror = { workspace = true }

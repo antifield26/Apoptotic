@@ -73,6 +73,9 @@ arc-swap = "1"
 # fast compression (NEON auto-vectorized via target-cpu=cortex-a76)
 lz4_flex = "0.11"
 
+# error handling
+thiserror = "2"
+
 # noise generation
 noise = "0.9"
 

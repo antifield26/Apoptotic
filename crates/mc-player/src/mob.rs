@@ -45,6 +45,8 @@ pub struct TrackedMob {
     /// C4: Dirty flags for incremental sync (bitmask)
     /// bit 0 = position, bit 1 = metadata (health, ai_state, etc.)
     pub dirty_flags: u8,
+    /// E7: Entity dormancy — mob is frozen (too far from all players)
+    pub is_dormant: bool,
 }
 
 /// C4: Dirty flag constants for TrackedMob incremental sync
@@ -647,7 +649,7 @@ impl MobManager {
             sulfur_cube_archetype: None,
             absorbed_block_id: None,
             is_small_cube: true,
-            dirty_flags: 3,
+            is_dormant: false, dirty_flags: 3,
         };
         let chunk = (
             (small.position.x.floor() as i32).div_euclid(16),
@@ -687,24 +689,27 @@ impl MobManager {
                 mob.age_ticks = mob.age_ticks.wrapping_add(1);
                 mob.attack_cooldown = mob.attack_cooldown.saturating_sub(1);
 
-                // ── Entity Activation Range (PaperMC-style) ──
-                // Skip AI for mobs far from any player to save CPU
-                let (activation_range, skip_frequency) = if ET::is_hostile(mob.mob_type) {
-                    (48.0_f64.powi(2), 20u64) // 48 blocks, tick every 1s when beyond
+                // ── Entity Activation Range (PaperMC-style) with Dormancy ──
+                // E7: Full dormancy — entities far from players are frozen entirely.
+                // Awakened when a player enters activation range.
+                let activation_range_sq = if ET::is_hostile(mob.mob_type) {
+                    48.0_f64.powi(2)  // 48 blocks
                 } else if matches!(mob.mob_type, 16 | 20 | 21 | 23 | 24 | 27 | 65 | 66) {
-                    (24.0_f64.powi(2), 60u64) // ambient/fish: 24 blocks
+                    24.0_f64.powi(2)  // ambient/fish: 24 blocks
                 } else {
-                    (32.0_f64.powi(2), 40u64) // passive: 32 blocks
+                    32.0_f64.powi(2)  // passive: 32 blocks
                 };
                 let near_player = player_manager.map(|pm| {
                     pm.players_in_range(mob.position.x, mob.position.y, mob.position.z,
-                        activation_range.sqrt()).into_iter().next().is_some()
+                        activation_range_sq.sqrt()).into_iter().next().is_some()
                 }).unwrap_or(false);
-                // EAR 2.0: immunity check — don't skip AI for mobs on fire or in water
                 let immune = mob.is_on_fire || mob.is_in_water;
-                if !near_player && !immune && mob.age_ticks.wrapping_rem(skip_frequency) != 0 {
-                    continue; // too far from any player — skip AI this tick
+                // Dormancy: freeze completely when no player nearby
+                if !near_player && !immune {
+                    mob.is_dormant = true;
+                    continue; // dormant — skip ALL AI processing
                 }
+                mob.is_dormant = false; // awakened
 
                 if mob.ai_timer > 0 { mob.ai_timer -= 1; continue; }
 
@@ -1001,6 +1006,20 @@ impl MobManager {
                         mob.position.y += hop_height;
                         let friction = arch.map(|a| a.friction()).unwrap_or(0.6);
                         let next_hop_delay = (30.0 / friction.max(0.1)).min(80.0) as u64;
+                        // 26.2 Hot archetype: damage entities on contact
+                        if let Some(SulfurCubeArchetype::Hot) = arch {
+                            if let Some(pm) = player_manager {
+                                for player in pm.all_players() {
+                                    let dx = player.position.x - mob.position.x;
+                                    let dz = player.position.z - mob.position.z;
+                                    let dy = player.position.y - mob.position.y;
+                                    if dx*dx + dz*dz < 2.25 && dy.abs() < 2.0 {
+                                        // Fire damage on contact (1 heart per hop)
+                                        let _ = pm.apply_damage(&player.uuid, 2.0, mob.age_ticks);
+                                    }
+                                }
+                            }
+                        }
                         // 26.2: entity bounce emits vibration (frequency 2) for Sculk Sensor
                         let _ = self.position_tx.send(MobPositionEvent {
                             entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z,
@@ -1597,9 +1616,36 @@ impl MobManager {
                             113 => 0.25, // vex
                             _ => 0.3
                         };
-                        let dx = nearest_x - mob.position.x; let dz = nearest_z - mob.position.z;
-                        mob.position.x += (dx / dist) * speed;
-                        mob.position.z += (dz / dist) * speed;
+                        // A* pathfinding: follow cached waypoints when available,
+                        // fall back to direct movement if path is empty or stale
+                        let (target_x, target_z) = if !mob.path.is_empty()
+                            && mob.path_last_tick > 0
+                        {
+                            // Pop waypoints that we've reached (< 1.0 block away)
+                            while let Some(&(wx, _wy, wz)) = mob.path.first() {
+                                let wdist = ((wx - mob.position.x).powi(2)
+                                    + (wz - mob.position.z).powi(2)).sqrt();
+                                if wdist < 1.0 {
+                                    mob.path.remove(0);
+                                } else {
+                                    break;
+                                }
+                            }
+                            // Follow next waypoint
+                            if let Some(&(wx, _wy, wz)) = mob.path.first() {
+                                (wx, wz)
+                            } else {
+                                // Path exhausted — direct fallback
+                                (nearest_x, nearest_z)
+                            }
+                        } else {
+                            (nearest_x, nearest_z)
+                        };
+                        let dx = target_x - mob.position.x;
+                        let dz = target_z - mob.position.z;
+                        let tdist = (dx * dx + dz * dz).sqrt().max(0.01);
+                        mob.position.x += (dx / tdist) * speed;
+                        mob.position.z += (dz / tdist) * speed;
                         if mob.mob_type != 35 && (mob.age_ticks % 10 == 0) { mob.position.y += 0.5; }
                         let _ = self.position_tx.send(MobPositionEvent { entity_id: mob.entity_id, x: mob.position.x, y: mob.position.y, z: mob.position.z });
                     }
@@ -2552,7 +2598,7 @@ mod tests {
             owner_uuid: None, is_tamed: false, is_sitting: false, tame_attempts: 0,
             is_baby: false, in_love_ticks: 0, breed_cooldown: 0, is_sheared: false,
             path: vec![], path_last_tick: 0, is_on_fire: false, is_in_water: false,
-            sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, dirty_flags: 3,
+            sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false, is_dormant: false, dirty_flags: 3,
         }
     }
 

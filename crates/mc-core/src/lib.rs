@@ -3,6 +3,7 @@ pub mod biome;
 pub mod block;
 pub mod constants;
 pub mod effect;
+pub mod error;
 pub mod item;
 pub mod position;
 pub mod sound;

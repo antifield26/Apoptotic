@@ -197,6 +197,12 @@ pub struct Player {
     pub ac_last_violation_tick: u64,
     /// E2: Pending teleport flag (server-side teleports bypass anti-cheat)
     pub ac_bypass_until: u64,
+    /// E6: Last PlayerInput forward strength (-1.0 to 1.0)
+    pub last_input_forward: f32,
+    /// E6: Last PlayerInput sideways strength (-1.0 to 1.0)
+    pub last_input_sideways: f32,
+    /// E6: Last PlayerInput jump flag
+    pub last_input_jump: bool,
 }
 
 /// 共享的玩家管理器 — DashMap 无锁并发
@@ -290,6 +296,7 @@ impl PlayerManager {
             absorption_health: 0.0,
             ac_last_valid_x: 0.0, ac_last_valid_y: 64.0, ac_last_valid_z: 0.0,
             ac_violations: 0, ac_last_violation_tick: 0, ac_bypass_until: 0,
+            last_input_forward: 0.0, last_input_sideways: 0.0, last_input_jump: false,
         };
 
         let name = player.username.clone();
@@ -963,6 +970,19 @@ impl PlayerManager {
     pub fn set_sneaking(&self, uuid: &Uuid, sneaking: bool) -> Result<(), String> {
         match self.players.get_mut(uuid) {
             Some(mut p) => { p.is_sneaking = sneaking; Ok(()) }
+            None => Err("Player not found".into()),
+        }
+    }
+
+    /// 记录最新的 PlayerInput 移动输入 (用于反作弊验证)
+    pub fn set_movement_input(&self, uuid: &Uuid, forward: f32, sideways: f32, jump: bool) -> Result<(), String> {
+        match self.players.get_mut(uuid) {
+            Some(mut p) => {
+                p.last_input_forward = forward;
+                p.last_input_sideways = sideways;
+                p.last_input_jump = jump;
+                Ok(())
+            }
             None => Err("Player not found".into()),
         }
     }

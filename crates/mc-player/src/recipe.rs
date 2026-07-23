@@ -3355,13 +3355,6 @@ fn add_stonecutter_recipes(reg: &mut RecipeRegistry) {
         ingredients: vec![vec![1240],vec![1240],vec![1240], vec![1240],vec![1240],vec![1240], vec![1240],vec![1240],vec![1240]],
         is_shapeless: false, result_item: 1252, result_count: 1,
     });
-    // ── Sulfur Spike: 4 spikes → 1 sulfur block ──
-    reg.add(Recipe {
-        id: "minecraft:sulfur_block_from_spikes".into(), group: "building".into(), category: 0,
-        width: 2, height: 2,
-        ingredients: vec![vec![1251],vec![1251], vec![1251],vec![1251]],
-        is_shapeless: false, result_item: 1240, result_count: 1,
-    });
     // ── Tuff compacting: 4 tuff → polished_tuff ──
     reg.add(Recipe {
         id: "minecraft:polished_tuff".into(), group: "building".into(), category: 0,

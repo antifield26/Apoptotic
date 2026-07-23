@@ -1,11 +1,13 @@
 #![allow(clippy::type_complexity)]
 
+pub mod c2s_handlers;
 pub mod connection;
 pub mod encryption;
 pub mod handler_sync;
 pub mod lan_broadcast;
 pub mod listener;
 pub mod packet_io;
+pub mod play_loop;
 pub mod rate_limiter;
 
 // Type aliases for complex shared types

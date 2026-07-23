@@ -21,8 +21,6 @@ type SharedAdvancementTracker = Arc<parking_lot::RwLock<mc_player::advancement::
 // ═══════════════════════════════════════════════════════════════
 
 /// Tick 阶段定义: 名称 + 间隔 + 超时预算
-/// (reserved for Phase E — tick timing instrumentation)
-#[allow(dead_code)]
 pub struct TickStage {
     pub name: &'static str,
     pub interval: u64,        // 每 N tick 执行一次
@@ -36,8 +34,7 @@ impl TickStage {
 }
 
 /// 内置 tick 阶段表 (按 interval 排序)
-/// (reserved for Phase E — tick timing instrumentation)
-#[allow(dead_code)]
+/// Used for documentation, metrics, and budget tracking.
 pub const TICK_STAGES: &[TickStage] = &[
     // 每 tick: 饥饿 + 效果 + AI + 经验球
     TickStage::new("hunger",         1,    200),
@@ -374,7 +371,7 @@ fn make_tracked_mob(eid: i32, mob_type: i32, x: f64, y: f64, z: f64) -> mc_playe
         is_on_fire: false, is_in_water: false,
         path: Vec::new(), path_last_tick: 0,
         sulfur_cube_archetype: None, absorbed_block_id: None, is_small_cube: false,
-        dirty_flags: mc_player::mob::TrackedMob::DIRTY_ALL, // C4: new entity needs full sync
+        is_dormant: false, dirty_flags: mc_player::mob::TrackedMob::DIRTY_ALL, // C4: new entity needs full sync
     }
 }
 

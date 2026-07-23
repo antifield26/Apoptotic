@@ -42,6 +42,28 @@ pub fn tick_sulfur_spikes(chunk_store: &ChunkStore) -> Vec<(i32, i32, i32)> {
                     let is_ceiling = above != 0 && above != SULFUR_SPIKE_ID && below == 0;
                     // Floor spike: solid below, air above → stable (stalagmite)
                     let _is_floor = below != 0 && below != SULFUR_SPIKE_ID && above == 0;
+                    // Growth: ceiling spikes grow downward when there's a sulfur block above
+                    let above_block = get_block_id_at(chunk_store, wx, y + 2, wz);
+                    let is_on_sulfur = above_block == 1240; // Sulfur block
+                    if is_ceiling && is_on_sulfur && fastrand::f64() < 0.01
+                        && y - 1 >= -64
+                        && get_block_id_at(chunk_store, wx, y - 1, wz) == 0 {
+                            // Grow downward: add spike below
+                            if let Some(mut ch) = chunk_store.get_mut(cp) {
+                                ch.set_block(lx, y - 1, lz, mc_core::block::BlockState::new(SULFUR_SPIKE_ID));
+                            }
+                    }
+                    // Floor spikes (stalagmites): grow upward toward ceiling spikes
+                    let is_floor = below != 0 && below != SULFUR_SPIKE_ID && above == 0;
+                    let block_below = get_block_id_at(chunk_store, wx, y - 2, wz);
+                    if is_floor && block_below == 1240 && fastrand::f64() < 0.01
+                        && y + 1 <= 319
+                        && get_block_id_at(chunk_store, wx, y + 1, wz) == 0 {
+                            // Grow upward
+                            if let Some(mut ch) = chunk_store.get_mut(cp) {
+                                ch.set_block(lx, y + 1, lz, mc_core::block::BlockState::new(SULFUR_SPIKE_ID));
+                            }
+                    }
                     // Detach ceiling spikes randomly (simulates instability)
                     if is_ceiling && fastrand::f64() < 0.02 {
                         // Remove the spike block

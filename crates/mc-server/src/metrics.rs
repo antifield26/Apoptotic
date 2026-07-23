@@ -165,6 +165,25 @@ pub async fn serve_metrics(
                         p.position.x, p.position.y, p.position.z,
                         p.dimension
                     )).collect::<Vec<_>>().join("\n");
+                // TPS color coding
+                let tps_class = if _p95 >= 19 { "good" } else if _p95 >= 15 { "warn" } else { "bad" };
+                // Memory color coding
+                let mem_class = if memory < 500 { "good" } else if memory < 800 { "warn" } else { "bad" };
+                // Tick stage rows for dashboard
+                let stage_rows: String = TICK_STAGE_TIMES.iter()
+                    .map(|entry| {
+                        let stage_name = entry.key();
+                        let duration = entry.value();
+                        let budget = crate::tick::TICK_STAGES.iter()
+                            .find(|s| s.name == *stage_name)
+                            .map(|s| s.max_budget_us)
+                            .unwrap_or(0);
+                        let class = if *duration > budget * 2 { "bad" } else if *duration > budget { "warn" } else { "good" };
+                        format!("<tr><td>{}</td><td class=\"{}\">{}us</td><td>{}us</td></tr>",
+                            stage_name, class, duration, budget)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 let html = format!(r#"HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 
@@ -181,38 +200,50 @@ Content-Type: text/html; charset=utf-8
   .card{{background:#161b22;border:1px solid#30363d;border-radius:8px;padding:16px}}
   .card .label{{color:#8b949e;font-size:12px;text-transform:uppercase;letter-spacing:0.5px}}
   .card .value{{font-size:28px;font-weight:700;color:#58a6ff;margin:4px 0}}
-  .card .value.good{{color:#3fb950}} .card .value.warn{{color:#d2991d}} .card .value.bad{{color:#f85149}}
+  .card .sub-value{{font-size:14px;color:#8b949e}}
+  .value.good{{color:#3fb950}} .value.warn{{color:#d2991d}} .value.bad{{color:#f85149}}
   table{{width:100%;border-collapse:collapse;margin-top:20px}}
   th,td{{text-align:left;padding:8px 12px;border-bottom:1px solid#21262d}}
   th{{color:#8b949e;font-size:12px;text-transform:uppercase}} tr:hover{{background:#161b22}}
   .footer{{color:#484f58;font-size:11px;margin-top:30px;text-align:center}}
   .refresh{{color:#8b949e;font-size:12px}}
+  .section-title{{color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-top:24px;border-top:1px solid#21262d;padding-top:16px}}
 </style>
 </head>
 <body>
 <h1>⚡ Apoptotic</h1>
 <div class="sub">Minecraft 26.2 Server — Admin Dashboard <span class="refresh">(auto-refresh 5s)</span></div>
+
 <div class="grid">
   <div class="card"><div class="label">Players</div><div class="value good">{online}</div></div>
-  <div class="card"><div class="label">Chunks Loaded</div><div class="value">{cs_count}</div></div>
+  <div class="card"><div class="label">TPS (p95)</div><div class="value {tps_class}">{tps_p95}</div><div class="sub-value">p50: {tps_p50}</div></div>
+  <div class="card"><div class="label">Chunks</div><div class="value">{cs_count}</div></div>
+  <div class="card"><div class="label">Memory</div><div class="value {mem_class}">{memory} MB</div></div>
   <div class="card"><div class="label">Uptime</div><div class="value">{time_str}</div></div>
-  <div class="card"><div class="label">Memory</div><div class="value">{memory} MB</div></div>
-  <div class="card"><div class="label">Total Ticks</div><div class="value">{tick_val}</div></div>
-  <div class="card"><div class="label">TPS (p95)</div><div class="value good">{tps_p95}</div></div>
+  <div class="card"><div class="label">Ticks</div><div class="value">{tick_val}</div></div>
 </div>
-<h3>Online Players</h3>
+
+<div class="section-title">Online Players ({online})</div>
 <table>
 <tr><th>Name</th><th>Health</th><th>Position</th><th>Dimension</th></tr>
 {player_rows}
 </table>
+
+<div class="section-title">Tick Stages (latest, us)</div>
+<table>
+<tr><th>Stage</th><th>Duration (us)</th><th>Budget</th></tr>
+{stage_rows}
+</table>
+
 <div class="footer">Apoptotic v0.1.0 · Rust · Raspberry Pi 5 · MIT</div>
 <meta http-equiv="refresh" content="5">
 </body>
 </html>"#,
                     online=online, cs_count=cs_count,
                     time_str=time_str, memory=memory, tick_val=tick_val,
-                    tps_p95=_p95,
-                    player_rows=player_rows,
+                    tps_p50=_p50, tps_p95=_p95,
+                    tps_class=tps_class, mem_class=mem_class,
+                    player_rows=player_rows, stage_rows=stage_rows,
                 );
                 let _ = stream.write_all(html.as_bytes()).await;
                 return;
