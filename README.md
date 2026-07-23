@@ -64,9 +64,15 @@ GET /status    → {"server":"Apoptotic","tps_p95":"20","memory_mb":128,...}
 
 ## 数据管道
 
+注册表数据 (`item_registry.in.rs`) 已提交至仓库——部署设备无需 Minecraft 客户端。
+仅在需要更新到新 Minecraft 版本时运行以下脚本：
+
 ```bash
+# 更新注册表 (需要本地客户端 JAR 或 PrismineJS/npm)
 ./scripts/update-minecraft-data.sh 26.2           # diff 报告
 ./scripts/update-minecraft-data.sh 26.2 --apply   # 覆盖 item_registry.in.rs
+
+# 性能测试
 ./scripts/benchmark.sh 120 4                       # 120s 4 玩家基准测试
 ./scripts/optimize-profile.sh 3                    # PGO 优化编译 (5-15% 提升)
 ```

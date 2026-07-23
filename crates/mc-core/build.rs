@@ -54,8 +54,5 @@ fn main() {
         panic!("item_registry.in.rs must end with `}}` (closing function brace)");
     }
 
-    println!(
-        "cargo:warning=Item registry: {} entries validated",
-        insert_count
-    );
+    // Registry validated successfully — no warning needed (data is committed to git)
 }
