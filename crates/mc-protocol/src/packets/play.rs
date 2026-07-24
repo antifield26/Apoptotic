@@ -709,21 +709,6 @@ impl PacketDecoder for ChunkData {
     }
 }
 
-fn write_bit_set(buf: &mut Vec<u8>, longs: &[i64]) {
-    buf.extend_from_slice(&write_varint_bytes(longs.len() as i32));
-    for &l in longs {
-        buf.extend_from_slice(&l.to_be_bytes());
-    }
-}
-
-fn write_light_arrays(buf: &mut Vec<u8>, arrays: &[Vec<u8>]) {
-    buf.extend_from_slice(&write_varint_bytes(arrays.len() as i32));
-    for arr in arrays {
-        buf.extend_from_slice(&write_varint_bytes(arr.len() as i32));
-        buf.extend_from_slice(arr);
-    }
-}
-
 // Protocol 776 light array format: varint count, then [varint length + bytes] per array
 fn write_light_arrays_776(buf: &mut Vec<u8>, arrays: &[Vec<u8>]) {
     buf.extend_from_slice(&write_varint_bytes(arrays.len() as i32));

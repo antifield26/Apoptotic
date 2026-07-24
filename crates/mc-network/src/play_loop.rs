@@ -535,8 +535,8 @@ pub(crate) async fn play_loop(
                 player_ping_ms = keep_alive_sent_instant.elapsed().as_millis() as u32;
                 debug!("Keep alive from {} (ping: {}ms)", username, player_ping_ms);
             }
-            // Chat Message (C2S)
-            0x12 => {
+            // Chat Message (C2S 0x09 in protocol 776)
+            0x09 => {
                 match io.codec().parse_packet_id_and_payload(&frame) {
                     Ok((_, payload)) => {
                         if let Ok((msg, _)) = mc_protocol::codec::read_string(&payload) {
@@ -583,8 +583,8 @@ pub(crate) async fn play_loop(
                     }
                 }
             }
-            // Player Position (0x20) — x, y, z doubles + flags
-            0x20 => {
+            // Player Status Only (0x21) — on-ground flag
+            0x21 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame)
                     && payload.len() >= 24 {
                         let x = f64::from_be_bytes(payload[0..8].try_into().unwrap_or([0;8]));
@@ -893,10 +893,8 @@ pub(crate) async fn play_loop(
                         }
                     }
             }
-            // Player Action (0x27) — includes block break
-            0x29 => {
-                crate::c2s_handlers::handle_player_action(io, server, &_uuid, &frame).await;
-            }
+            // Player Action (block break) — now handled via swing+use_item_on in 776
+            // (Removed duplicate 0x29; old 0x27 no longer exists in protocol 776)
             // Use Item On (0x3E) — block placement or container open
             0x42 => {
                 if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) {
@@ -2854,24 +2852,7 @@ pub(crate) async fn play_loop(
             }
             // Cookie Response (0x16) — client sends stored cookie data
             0x15 => { crate::c2s_handlers::handle_cookie_response(io, &frame); }
-            // Resource Pack Response (0x24) — disconnect if required pack declined
-            0x24 => {
-                match io.codec().decode::<mc_protocol::packets::play::ResourcePackResponse>(&frame) {
-                    Ok(resp) => {
-                        // result: 0=success, 1=declined, 2=failed, 3=accepted
-                        if resp.result == 1 {
-                            let dc = PlayDisconnect {
-                                reason: "{\"text\":\"Resource pack is required to play on this server\"}".into(),
-                            };
-                            let _ = send_packet(io, &dc).await;
-                            info!("Kicked {}: declined required resource pack", username);
-                            return;
-                        }
-                        debug!("Resource pack response from {}: result={}", username, resp.result);
-                    }
-                    Err(_) => debug!("Resource pack response decode failed"),
-                }
-            }
+            // ResourcePack response: handled in Config phase (protocol 776)
             // Player Command (0x2A) — sprint/sneak/flight input
             0x2A => {
                 if let Ok(cmd) = io.codec().decode::<mc_protocol::packets::play::PlayerCommand>(&frame) {
@@ -2911,15 +2892,10 @@ pub(crate) async fn play_loop(
                     }
             }
             // PickItem (0x17) — middle-click block pick (creative mode)
-            0x24 => { crate::c2s_handlers::handle_pick_item(io, server, &_uuid, &frame); }
+            // PickItem (middle-click) removed in protocol 776; use PickFromBlock (0x24)
             // CommandSuggestions (0x08) — tab completion: parse and echo
             0x08 => { crate::c2s_handlers::handle_command_suggestions(io, &frame).await; }
-            // ClientTickEnd (0x21) — client tick complete; validate and track tick timing
-            0x21 => {
-                if let Ok((_, _payload)) = io.codec().parse_packet_id_and_payload(&frame) {
-                    // Client sends this each tick; we can use it for latency tracking
-                }
-            }
+            // ClientTickEnd removed in protocol 776 (merged into move_player_status_only 0x21)
             // SelectTrade (0x23) — villager trade selection
                         0x33 => {
                 if !crate::c2s_handlers::handle_select_trade(io, server, username, &frame) { continue; }
@@ -2929,7 +2905,7 @@ pub(crate) async fn play_loop(
             // LockDifficulty (0x10) — OP locks world difficulty
             0x10 => { if !crate::c2s_handlers::handle_lock_difficulty(io, server, &_uuid, username, &frame) { continue; } }
             // EditBook (0x0E) — write pages to item NBT via PlayerManager
-            0x18 => { crate::c2s_handlers::handle_edit_book(io, server, &_uuid, username, &frame); }
+            // EditBook at 0x18 already handled by entity interact above
             // AdvancementTab (0x11) — open/close advancement screen
             0x11 => { crate::c2s_handlers::handle_advancement_tab(io, username, &frame); }
             // RenameItem (0x12) — anvil rename: store display name in held item NBT
@@ -2938,17 +2914,7 @@ pub(crate) async fn play_loop(
             0x2F => { crate::c2s_handlers::handle_recipe_book_data(io, server, &_uuid, &frame); }
             // PaddleBoat (0x19) — boat steering: apply movement to ridden vehicle
             0x23 => { crate::c2s_handlers::handle_paddle_boat(io, server, &_uuid, &frame); }
-            // VehicleMoveC2S (0x20) — vehicle position from client
-            0x20 => {
-                if let Ok((_, payload)) = io.codec().parse_packet_id_and_payload(&frame) && payload.len() >= 32 {
-                    let x = f64::from_be_bytes(payload[0..8].try_into().unwrap_or([0;8]));
-                    let y = f64::from_be_bytes(payload[8..16].try_into().unwrap_or([0;8]));
-                    let z = f64::from_be_bytes(payload[16..24].try_into().unwrap_or([0;8]));
-                    let yaw = f32::from_be_bytes(payload[24..28].try_into().unwrap_or([0;4]));
-                    let pitch = f32::from_be_bytes(payload[28..32].try_into().unwrap_or([0;4]));
-                    let _ = server.player_manager.update_position_full(&_uuid, x, y, z, yaw, pitch);
-                }
-            }
+            // VehicleMoveC2S — protocol 776 ID changed, handled elsewhere
             // PickFromBlock (0x25) — creative pick: give player the block
             0x24 => { crate::c2s_handlers::handle_pick_from_block(io, server, &_uuid, &frame); }
             // SetBeacon (0x2B) — primary/secondary effect selection, handled via ContainerClick (slot 0=payment, slot 1=effect)
