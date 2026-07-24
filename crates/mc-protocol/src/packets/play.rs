@@ -547,6 +547,102 @@ pub struct ChunkSectionData {
     pub biomes: Vec<u8>,             // PalettedContainer 编码
 }
 
+// ═══════════════════════════════════════════════════════
+// Protocol 776: Chunk batch system
+// ═══════════════════════════════════════════════════════
+
+/// S→C: Chunk Batch Start (0x0C) — signals the beginning of a chunk batch
+pub struct ChunkBatchStart;
+
+impl PacketEncoder for ChunkBatchStart {
+    fn packet_id(&self) -> i32 { 0x0C }
+    fn encode_payload(&self) -> Vec<u8> { Vec::new() } // empty payload
+}
+
+/// S→C: Chunk Batch Finished (0x0B) — signals end of chunk batch
+pub struct ChunkBatchFinished {
+    pub batch_size: i32,   // number of chunks in this batch
+}
+
+impl PacketEncoder for ChunkBatchFinished {
+    fn packet_id(&self) -> i32 { 0x0B }
+    fn encode_payload(&self) -> Vec<u8> {
+        write_varint_bytes(self.batch_size)
+    }
+}
+
+/// S→C: Chunks Biomes (0x0D) — sends biome data for chunks
+pub struct ChunksBiomes {
+    pub chunk_biomes: Vec<ChunkBiomeEntry>,
+}
+
+pub struct ChunkBiomeEntry {
+    pub chunk_x: i32,
+    pub chunk_z: i32,
+    pub biome_data: Vec<u8>,  // serialized biome paletted container
+}
+
+impl PacketEncoder for ChunksBiomes {
+    fn packet_id(&self) -> i32 { 0x0D }
+    fn encode_payload(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&write_varint_bytes(self.chunk_biomes.len() as i32));
+        for entry in &self.chunk_biomes {
+            buf.extend_from_slice(&write_i32(entry.chunk_x));
+            buf.extend_from_slice(&write_i32(entry.chunk_z));
+            buf.extend_from_slice(&write_varint_bytes(entry.biome_data.len() as i32));
+            buf.extend_from_slice(&entry.biome_data);
+        }
+        buf
+    }
+}
+
+/// S→C: Set Chunk Cache Center (0x5F) — sets center of chunk loading area
+pub struct SetChunkCacheCenter {
+    pub chunk_x: i32,
+    pub chunk_z: i32,
+}
+
+impl PacketEncoder for SetChunkCacheCenter {
+    fn packet_id(&self) -> i32 { 0x5F }
+    fn encode_payload(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&write_varint_bytes(self.chunk_x));
+        buf.extend_from_slice(&write_varint_bytes(self.chunk_z));
+        buf
+    }
+}
+
+/// S→C: Set Chunk Cache Radius (0x60) — sets chunk loading radius
+pub struct SetChunkCacheRadius {
+    pub radius: i32,
+}
+
+impl PacketEncoder for SetChunkCacheRadius {
+    fn packet_id(&self) -> i32 { 0x60 }
+    fn encode_payload(&self) -> Vec<u8> {
+        write_varint_bytes(self.radius)
+    }
+}
+
+/// S→C: Forget Level Chunk (0x25) — unload a chunk on the client
+pub struct ForgetLevelChunk {
+    pub chunk_x: i32,
+    pub chunk_z: i32,
+}
+
+impl PacketEncoder for ForgetLevelChunk {
+    fn packet_id(&self) -> i32 { 0x25 }
+    fn encode_payload(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&write_i32(self.chunk_x));
+        buf.extend_from_slice(&write_i32(self.chunk_z));
+        buf
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+
 /// Level Chunk With Light (protocol 776: 0x2D) — replaces old ChunkData
 pub struct ChunkData {
     pub chunk_x: i32,

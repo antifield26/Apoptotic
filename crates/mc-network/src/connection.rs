@@ -5,6 +5,7 @@
 use mc_protocol::codec::*;
 use mc_protocol::packets::handshake::HandshakePacket;
 use mc_protocol::packets::login::*;
+use mc_protocol::packets::play::*;
 use mc_protocol::packets::status::*;
 use mc_protocol::state::ConnectionState;
 use mc_command::dispatcher::CommandDispatcher;
@@ -863,37 +864,12 @@ async fn handle_play(
                 }
     }
 
-    // 发送 Join Game
-    let join_game = JoinGame {
-        entity_id,
-        is_hardcore: false,
-        gamemode: 0,
-        previous_gamemode: -1,
-        dimension_names: vec![
-            "minecraft:overworld".into(),
-            "minecraft:the_nether".into(),
-            "minecraft:the_end".into(),
-        ],
-        registry_codec: Vec::new(),
-        dimension_type: "minecraft:overworld".into(),
-        dimension_name: "minecraft:overworld".into(),
-        hashed_seed: server.world_seed as i64,
-        max_players: server.max_players as i32,
-        view_distance: server.view_distance as i32,
-        simulation_distance: server.view_distance as i32,
-        reduced_debug_info: false,
-        enable_respawn_screen: true,
-        is_debug: false,
-        is_flat: server.generator_name == "flat",
-        death_location: None,
-        portal_cooldown: 0,
-    };
-
-    if let Err(e) = send_packet(io, &join_game).await {
-        error!("Failed to send Join Game: {}", e);
-        cleanup_player_join(server, &_uuid, 0);
-        return;
-    }
+    // Protocol 776: JoinGame removed — dimension data from Configuration phase.
+    // Set up chunk streaming cache for the player's view distance.
+    let cache_center = SetChunkCacheCenter { chunk_x: 0, chunk_z: 0 };
+    let _ = send_packet(io, &cache_center).await;
+    let cache_radius = SetChunkCacheRadius { radius: server.view_distance as i32 };
+    let _ = send_packet(io, &cache_radius).await;
 
     // Send player abilities (survival defaults — updated on gamemode change)
     let _ = send_packet(io, &PlayerAbilities::survival()).await;
@@ -1319,6 +1295,9 @@ pub(crate) async fn stream_new_chunks(
             new_chunks.len(), to_send.len(), deferred,
         );
 
+        // Protocol 776: chunk batch protocol
+        let _ = send_packet(io, &ChunkBatchStart).await;
+
         for cp in &to_send {
             let chunk = server.generator.generate_chunk(*cp, server.world_seed);
             let chunk_data = chunk.to_chunk_data();
@@ -1378,9 +1357,11 @@ pub(crate) async fn stream_new_chunks(
 
             server.chunk_store.insert(*cp, chunk);
         }
+        // Protocol 776: signal end of chunk batch
+        let _ = send_packet(io, &ChunkBatchFinished { batch_size: to_send.len() as i32 }).await;
     }
 
-    // Evict chunks that left view distance (save dirty ones first)
+    // Evict chunks that left view distance (save dirty ones first, send forget packets)
     let evicted: Vec<_> = loaded_chunks
         .iter()
         .filter(|cp| !visible.contains(cp))
@@ -1399,6 +1380,8 @@ pub(crate) async fn stream_new_chunks(
         }
     }
     for cp in &evicted {
+        // Protocol 776: send forget chunk before removing
+        let _ = send_packet(io, &ForgetLevelChunk { chunk_x: cp.x, chunk_z: cp.z }).await;
         server.chunk_store.remove(cp);
     }
     loaded_chunks.retain(|cp| visible.contains(cp));

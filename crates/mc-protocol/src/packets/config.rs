@@ -65,7 +65,7 @@ pub struct FeatureFlags {
 }
 
 impl PacketEncoder for FeatureFlags {
-    fn packet_id(&self) -> i32 { 0x0C }
+    fn packet_id(&self) -> i32 { 0x0D }
     fn encode_payload(&self) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend_from_slice(&write_varint_bytes(self.flags.len() as i32));
@@ -104,7 +104,7 @@ pub struct KnownPack {
 }
 
 impl PacketEncoder for KnownPacks {
-    fn packet_id(&self) -> i32 { 0x0E }
+    fn packet_id(&self) -> i32 { 0x0F }
     fn encode_payload(&self) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend_from_slice(&write_varint_bytes(self.known_packs.len() as i32));
