@@ -663,6 +663,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // 推进世界时间
                 world_state.write().add_time(1);
 
+                // Idle guard: skip expensive ticks when no players are connected
+                let has_players = player_manager.online_count() > 0;
+
                 // Weather cycle (every 20 ticks)
                 if tick_count.is_multiple_of(20) {
                     tick::tick_weather(&world_state, &player_manager);
@@ -684,8 +687,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 // Tick furnace smelting (every tick for correct vanilla speed)
                 furnace_manager.write().tick();
-                // Tick redstone engine (every 2 ticks)
-                if tick_count.is_multiple_of(2) {
+                // Tick redstone engine (every 2 ticks, skip when idle)
+                if has_players && tick_count.is_multiple_of(2) {
                     redstone_engine.tick(&chunk_store);
                 }
                 // Hopper item transfer (every 8 ticks ≈ 0.4s)
@@ -1966,12 +1969,9 @@ async fn accept_loop(
                         let srv = server_ref.clone();
                         let permit = semaphore.clone();
                         info!("Incoming connection from {}", addr);
-                        let handle = tokio::runtime::Handle::current();
-                        std::thread::spawn(move || {
-                            handle.block_on(async move {
-                                let _permit = permit.acquire().await;
-                                connection::handle_connection(stream, srv).await;
-                            });
+                        tokio::spawn(async move {
+                            let _permit = permit.acquire().await;
+                            connection::handle_connection(stream, srv).await;
                         });
                     }
                     Err(e) => error!("Accept error: {}", e),

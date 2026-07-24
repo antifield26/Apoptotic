@@ -42,7 +42,7 @@ try:
     # Handshake
     host = 'localhost'
     handshake = write_varint(0)  # packet ID
-    handshake += write_varint(767)  # protocol version
+    handshake += write_varint(776)  # protocol version (Minecraft 26.2)
     handshake += write_varint(len(host)) + host.encode()
     handshake += struct.pack('>H', 25565)
     handshake += write_varint(1)  # next state: Status

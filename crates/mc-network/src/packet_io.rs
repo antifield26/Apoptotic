@@ -83,12 +83,37 @@ impl PacketStream {
     }
 
     /// 发送一个编码后的帧
+    /// `data` is the full frame: [VarInt length prefix] + [packet body].
+    /// When encryption is enabled, ONLY the packet body is encrypted;
+    /// the length prefix MUST remain plaintext per Minecraft protocol spec.
     pub async fn write_frame(&mut self, data: &[u8]) -> std::io::Result<()> {
-        // 加密后再写入 (如果加密已启用) — outgoing data becomes ciphertext
         if let Some(ref mut cipher) = self.encryption {
-            let mut encrypted = data.to_vec();
-            cipher.encrypt(&mut encrypted);
-            self.write.write_all(&encrypted).await?;
+            // Parse VarInt length prefix to find body boundary
+            let mut prefix_len: usize = 0;
+            let mut _length: i32 = 0;
+            let mut shift: u32 = 0;
+            for &byte in data.iter() {
+                prefix_len += 1;
+                _length |= ((byte & 0x7F) as i32) << shift;
+                if byte & 0x80 == 0 {
+                    break;
+                }
+                shift += 7;
+                if shift >= 32 || prefix_len >= 5 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "VarInt too large in outgoing frame",
+                    ));
+                }
+            }
+            // Split: plaintext length prefix + encrypt body only
+            let prefix = &data[..prefix_len];
+            let body = &data[prefix_len..];
+            let mut encrypted_body = body.to_vec();
+            cipher.encrypt(&mut encrypted_body);
+            // Write [plaintext length prefix] + [encrypted body]
+            self.write.write_all(prefix).await?;
+            self.write.write_all(&encrypted_body).await?;
         } else {
             self.write.write_all(data).await?;
         }
