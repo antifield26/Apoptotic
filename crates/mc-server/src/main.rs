@@ -821,8 +821,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     mc_world::crops::tick_crops(&chunk_store);
                 }
 
-                // Tick fluid physics (every 5 ticks)
-                if tick_count.is_multiple_of(5) {
+                // Tick fluid physics (every 5 ticks, skip when idle)
+                if has_players && tick_count.is_multiple_of(5) {
                     fluid_engine.tick(&chunk_store);
                 }
                 // 26.2: Tick Potent Sulfur + Sulfur Spike effects (every 20 ticks = 1s)
@@ -970,11 +970,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if tick_count.is_multiple_of(100) {
                     mc_player::villager::GLOBAL_GOSSIP.tick();
                 }
-                // Mob spawning
-                if tick_count.is_multiple_of(100) {
+                // Mob spawning (skip when idle)
+                if has_players && tick_count.is_multiple_of(100) {
                     tick::tick_hostile_spawning(&player_manager, &mob_manager, &chunk_store, &world_state, &next_entity_id_for_tick);
                 }
-                if tick_count.is_multiple_of(200) {
+                if has_players && tick_count.is_multiple_of(200) {
                     tick::tick_passive_spawning(&player_manager, &mob_manager, &chunk_store, &world_state, &next_entity_id_for_tick);
                 }
                 // 26.2: Wandering Trader spawning (check every 24000 ticks = 1 MC day)
@@ -1036,7 +1036,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 // Tick mob AI (with player proximity for hostile chase, projectile spawning)
-                mob_manager.tick_ai(Some(&player_manager));
+                // Tick mob AI (skip when no players — entities are dormant anyway)
+                if has_players {
+                    mob_manager.tick_ai(Some(&player_manager));
+                }
 
                 // Tick projectiles — update positions, despawn expired
                 // Tick projectiles + detect player hits for bow enchantments (Power/Flame/Punch)
@@ -1192,8 +1195,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
 
-                // Update mob pathfinding (every 40 ticks)
-                if tick_count.is_multiple_of(40) {
+                // Update mob pathfinding (every 40 ticks, skip when idle)
+                if has_players && tick_count.is_multiple_of(40) {
                     tick::tick_mob_pathfinding(&player_manager, &mob_manager, &chunk_store, tick_count);
                 }
 
