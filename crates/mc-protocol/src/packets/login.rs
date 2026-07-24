@@ -13,13 +13,10 @@ pub struct LoginStart {
 impl PacketEncoder for LoginStart {
     fn packet_id(&self) -> i32 { 0x00 }
     fn encode_payload(&self) -> Vec<u8> {
+        // Protocol 776 "hello": name (string) + profileId (uuid)
         let mut buf = write_string(&self.username);
-        if let Some(ref uuid) = self.player_uuid {
-            buf.extend_from_slice(&write_bool(true));
-            buf.extend_from_slice(&write_uuid(uuid));
-        } else {
-            buf.extend_from_slice(&write_bool(false));
-        }
+        let uuid = self.player_uuid.unwrap_or_else(uuid::Uuid::nil);
+        buf.extend_from_slice(&write_uuid(&uuid));
         buf
     }
 }
@@ -27,17 +24,11 @@ impl PacketEncoder for LoginStart {
 impl PacketDecoder for LoginStart {
     fn packet_id() -> i32 { 0x00 }
     fn decode_payload(data: &[u8]) -> Result<Self, CodecError> {
-        let (username, mut offset) = read_string(data)?;
-        // In newer protocol versions, there may be a UUID field
+        // Protocol 776: "hello" packet — name (string) + profileId (uuid, always present)
+        let (username, offset) = read_string(data)?;
         let player_uuid = if offset < data.len() {
-            let (has_uuid, n) = read_bool(&data[offset..])?;
-            offset += n;
-            if has_uuid {
-                let (uuid, _) = read_uuid(&data[offset..])?;
-                Some(uuid)
-            } else {
-                None
-            }
+            let (uuid, _) = read_uuid(&data[offset..])?;
+            Some(uuid)
         } else {
             None
         };
@@ -60,22 +51,22 @@ pub struct LoginSuccess {
 impl PacketEncoder for LoginSuccess {
     fn packet_id(&self) -> i32 { 0x02 }
     fn encode_payload(&self) -> Vec<u8> {
+        // Protocol 776 "login_finished": gameProfile + sessionId
         let mut buf = Vec::new();
+        // gameProfile: id (uuid) + name (string) + properties (array)
         buf.extend_from_slice(&write_uuid(&self.uuid));
         buf.extend_from_slice(&write_string(&self.username));
-
-        // properties (varint-prefixed list)
         buf.extend_from_slice(&write_varint_bytes(self.properties.len() as i32));
         for prop in &self.properties {
             buf.extend_from_slice(&write_string(&prop.name));
             buf.extend_from_slice(&write_string(&prop.value));
+            buf.extend_from_slice(&write_bool(prop.signature.is_some()));
             if let Some(ref sig) = prop.signature {
-                buf.extend_from_slice(&write_bool(true));
                 buf.extend_from_slice(&write_string(sig));
-            } else {
-                buf.extend_from_slice(&write_bool(false));
             }
         }
+        // sessionId: uuid (random session identifier)
+        buf.extend_from_slice(&write_uuid(&uuid::Uuid::new_v4()));
         buf
     }
 }

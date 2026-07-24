@@ -233,16 +233,13 @@ pub struct ServerLink {
 }
 
 impl PacketEncoder for ServerLinks {
-    fn packet_id(&self) -> i32 { 0x4F }
+    // Protocol 776: server_links is now sent in Config phase (0x11)
+    // Keep struct for backward compat but use correct ID
+    fn packet_id(&self) -> i32 { 0x8A }
     fn encode_payload(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-        buf.extend_from_slice(&write_varint_bytes(self.links.len() as i32));
-        for link in &self.links {
-            buf.extend_from_slice(&write_bool(true)); // is_builtin = false
-            buf.extend_from_slice(&write_string(&link.label));
-            buf.extend_from_slice(&write_string(&link.url));
-        }
-        buf
+        // Protocol 776 format: varint entry count, then entries
+        // Each entry: either(varint builtin_id, chat component)
+        write_varint_bytes(0) // empty — sent in Config phase now
     }
 }
 
@@ -285,33 +282,45 @@ impl PacketDecoder for SetDefaultSpawnPosition {
 // S→C: Synchronize Player Position (0x41)
 // ═══════════════════════════════════════════════════════
 
+/// Protocol 776: Player Position (0x48) — sets client camera position
 pub struct PlayerPosition {
+    pub teleport_id: i32,
     pub x: f64,
     pub y: f64,
     pub z: f64,
+    pub dx: f64,  // delta movement X
+    pub dy: f64,  // delta movement Y
+    pub dz: f64,  // delta movement Z
     pub yaw: f32,
     pub pitch: f32,
-    pub flags: u8,     // bit field for relative coords
-    pub teleport_id: i32,
+    pub flags: i32, // relativeArguments bitfield
 }
 
 impl PacketEncoder for PlayerPosition {
-    fn packet_id(&self) -> i32 { 0x41 }
+    fn packet_id(&self) -> i32 { 0x48 }
     fn encode_payload(&self) -> Vec<u8> {
         let mut buf = Vec::new();
+        // id (varint teleport ID)
+        buf.extend_from_slice(&write_varint_bytes(self.teleport_id));
+        // position (vec3f64 — 3 x f64)
         buf.extend_from_slice(&write_double(self.x));
         buf.extend_from_slice(&write_double(self.y));
         buf.extend_from_slice(&write_double(self.z));
+        // deltaMovement (vec3f64 — 3 x f64)
+        buf.extend_from_slice(&write_double(self.dx));
+        buf.extend_from_slice(&write_double(self.dy));
+        buf.extend_from_slice(&write_double(self.dz));
+        // yRot, xRot (f32)
         buf.extend_from_slice(&write_f32(self.yaw));
         buf.extend_from_slice(&write_f32(self.pitch));
-        buf.push(self.flags);
-        buf.extend_from_slice(&write_varint_bytes(self.teleport_id));
+        // relativeArguments (i32 bitfield)
+        buf.extend_from_slice(&write_i32(self.flags));
         buf
     }
 }
 
 impl PacketDecoder for PlayerPosition {
-    fn packet_id() -> i32 { 0x41 }
+    fn packet_id() -> i32 { 0x48 }
     fn decode_payload(_data: &[u8]) -> Result<Self, CodecError> {
         Err(CodecError::Malformed("PlayerPosition decode not implemented".into()))
     }

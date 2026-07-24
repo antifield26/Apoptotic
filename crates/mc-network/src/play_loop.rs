@@ -489,9 +489,9 @@ pub(crate) async fn play_loop(
                             };
                             let _ = send_packet(io, &respawn).await;
                             let pos = mc_protocol::packets::play::PlayerPosition {
-                                x: sx, y: sy, z: sz,
-                                yaw: syaw, pitch: 0.0,
-                                flags: 0, teleport_id: 42,
+                                teleport_id: 42, x: sx, y: sy, z: sz,
+                                dx: 0.0, dy: 0.0, dz: 0.0,
+                                yaw: syaw, pitch: 0.0, flags: 0,
                             };
                             let _ = send_packet(io, &pos).await;
                             server.player_manager.set_health(&_uuid, 20.0).ok();
@@ -723,9 +723,10 @@ pub(crate) async fn play_loop(
 
                                     // Send position in new dimension
                                     let tp = mc_protocol::packets::play::PlayerPosition {
+                                        teleport_id: fastrand::i32(1..i32::MAX),
                                         x: tx, y: target_y, z: tz,
-                                        yaw: py, pitch: pp,
-                                        flags: 0, teleport_id: fastrand::i32(1..i32::MAX),
+                                        dx: 0.0, dy: 0.0, dz: 0.0,
+                                        yaw: py, pitch: pp, flags: 0,
                                     };
                                     let _ = send_packet(io, &tp).await;
                                     let _ = server.player_manager.update_position_full(&_uuid, tx, target_y, tz, py, pp);
@@ -1392,7 +1393,7 @@ pub(crate) async fn play_loop(
                             let new_x = px + (-yaw_rad.sin()) * dash_dist;
                             let new_z = pz + yaw_rad.cos() * dash_dist;
                             let _ = server.player_manager.update_position_full(&_uuid, new_x, py, new_z, yaw, pitch);
-                            let pos_pkt = PlayerPosition { x: new_x, y: py, z: new_z, yaw, pitch, flags: 0, teleport_id: 0 };
+                            let pos_pkt = PlayerPosition { teleport_id: 0, x: new_x, y: py, z: new_z, dx: 0.0, dy: 0.0, dz: 0.0, yaw, pitch, flags: 0 };
                             let _ = send_packet(io, &pos_pkt).await;
                         } else {
                             let yaw_rad = yaw as f64 * std::f64::consts::TAU / 256.0;
@@ -1466,7 +1467,7 @@ pub(crate) async fn play_loop(
                             let new_y = (py + vy * 2.0).max(0.0);
                             let new_z = pz + vz * 2.0;
                             let _ = server.player_manager.update_position_full(&_uuid, new_x, new_y, new_z, yaw, pitch);
-                            let pos_pkt = PlayerPosition { x: new_x, y: new_y, z: new_z, yaw, pitch, flags: 0, teleport_id: 0 };
+                            let pos_pkt = PlayerPosition { teleport_id: 0, x: new_x, y: new_y, z: new_z, dx: 0.0, dy: 0.0, dz: 0.0, yaw, pitch, flags: 0 };
                             let _ = send_packet(io, &pos_pkt).await;
                             // Spawn firework visuals
                             let fw_eid = server.next_entity_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

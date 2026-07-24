@@ -1022,13 +1022,11 @@ async fn handle_play(
         (0.0, 64.0, 0.0, 0.0f32, 0.0f32)
     };
     let pos_packet = PlayerPosition {
-        x: player_x,
-        y: player_y,
-        z: player_z,
-        yaw: player_yaw,
-        pitch: player_pitch,
-        flags: 0,
         teleport_id: 42,
+        x: player_x, y: player_y, z: player_z,
+        dx: 0.0, dy: 0.0, dz: 0.0,
+        yaw: player_yaw, pitch: player_pitch,
+        flags: 0,
     };
 
     if let Err(e) = send_packet(io, &pos_packet).await {

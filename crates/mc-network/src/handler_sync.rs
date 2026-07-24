@@ -60,7 +60,7 @@ pub async fn handle_player_state_events(
                 let _ = connection::send_packet(io, &abilities).await;
             }
             mc_player::player::PlayerStateEventKind::Teleport(x, y, z, yaw, pitch, teleport_id) => {
-                let pos = PlayerPosition { x: *x, y: *y, z: *z, yaw: *yaw, pitch: *pitch, flags: 0, teleport_id: *teleport_id };
+                let pos = PlayerPosition { teleport_id: *teleport_id, x: *x, y: *y, z: *z, dx: 0.0, dy: 0.0, dz: 0.0, yaw: *yaw, pitch: *pitch, flags: 0 };
                 let _ = connection::send_packet(io, &pos).await;
             }
             mc_player::player::PlayerStateEventKind::FoodUpdate(food, saturation) => {
@@ -126,7 +126,7 @@ pub async fn handle_player_state_events(
                     death_location: None, portal_cooldown: 0, data_kept: 0,
                 };
                 let _ = connection::send_packet(io, &respawn).await;
-                let pos = PlayerPosition { x: *x, y: *y, z: *z, yaw: 0.0, pitch: 0.0, flags: 0, teleport_id: 42 };
+                let pos = PlayerPosition { teleport_id: 42, x: *x, y: *y, z: *z, dx: 0.0, dy: 0.0, dz: 0.0, yaw: 0.0, pitch: 0.0, flags: 0 };
                 let _ = connection::send_packet(io, &pos).await;
             }
             mc_player::player::PlayerStateEventKind::ScoreboardObjective(name, action, display, _criteria) => {

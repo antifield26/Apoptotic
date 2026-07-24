@@ -118,6 +118,20 @@ impl PacketEncoder for KnownPacks {
 }
 
 // ═══════════════════════════════════════════════════════
+// S→C: Server Links (Config 0x11) — sent during configuration
+// Protocol 776: each entry is either(varint builtin_id, chat_component)
+// ═══════════════════════════════════════════════════════
+
+pub struct ConfigServerLinks;
+
+impl PacketEncoder for ConfigServerLinks {
+    fn packet_id(&self) -> i32 { 0x11 }
+    fn encode_payload(&self) -> Vec<u8> {
+        write_varint_bytes(0) // empty entries
+    }
+}
+
+// ═══════════════════════════════════════════════════════
 // S→C: Keep Alive (Config) — same structure as Play keep-alive
 // ═══════════════════════════════════════════════════════
 
